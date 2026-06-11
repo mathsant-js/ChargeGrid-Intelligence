@@ -20,3 +20,17 @@ def distribuir_potencia(demandas):
         distribuicao.append(potencia_recebida)
     
     return distribuicao
+
+def exibir_relatorio(veiculos, demandas, distribuicao): 
+    print("\n" + "=" * 60)
+    print("RELATÓRIO DE CARREGAMENTO")
+    print("=" * 60)
+    
+    for i in range(len(veiculos)): 
+        pagamento = calcular_pagamento(demandas[i])
+        
+        print(f"\nVeículo: {veiculos[i]}")
+        print(f"Energia necessária: {demandas[i]:.2f} kWh")
+        print(f"Potência recebida: {distribuicao[i]:.2f} kW")
+        print(f"Valor a pagar: R$ {pagamento:.2f}")
+        print("\n" + "=" * 60)
