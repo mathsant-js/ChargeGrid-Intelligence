@@ -200,6 +200,11 @@ python app.py
 Link do vídeo pitch (YouTube Não Listado):
 > https://youtu.be/ikWwzE1RMOU
 
+## Quadro Kanban da equipe
+
+Link do quadro Kanban da equipe (GitHub Project)
+> https://github.com/users/mathsant-js/projects/4
+
 
 ## Materiais Técnicos Relevantes
 
