@@ -198,10 +198,7 @@ python app.py
 ## Vídeo Demonstrativo
 
 Link do vídeo pitch (YouTube Não Listado):
-
-```text
-> Será adicionado...
-```
+> https://youtu.be/ikWwzE1RMOU
 
 
 ## Materiais Técnicos Relevantes
