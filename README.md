@@ -65,8 +65,18 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Especificação técnica](SPEC.md)
 - [Instruções para agentes](AGENTS.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
-- [Plano da Fase 1](docs/PHASE_1.md)
+- [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
 
 ## Estado atual
 
-A fundação da Fase 1 inclui estrutura de diretórios, configuração por ambiente, PostgreSQL, Alembic, API com health check, shell React, testes e automação de qualidade. Entidades e regras de domínio começam na Fase 2.
+A Fase 1 está concluída e seus critérios de saída estão documentados com evidências.
+Além da fundação técnica, o backend já expõe APIs e persistência para usuários,
+veículos, estações, carregadores, sessões, leituras de energia e solar, tarifas,
+invoices, alertas, previsões de demanda e configuração do sistema. O início e o
+encerramento de sessões já aplicam regras de domínio, incluindo disponibilidade,
+potência solicitada, billing e alerta de conclusão.
+
+O frontend ainda é o shell da fundação com monitoramento online/offline da API. As
+próximas entregas devem completar simulação, cálculo energético, gestão de potência e
+prioridade solar antes dos dashboards e do pipeline de Machine Learning. Consulte a
+seção de continuidade em [Fase 1 — Fundação (concluída)](docs/PHASE_1.md).

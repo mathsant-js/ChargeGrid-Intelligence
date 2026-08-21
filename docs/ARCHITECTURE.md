@@ -6,16 +6,47 @@ O ChargeGrid Intelligence é um monólito modular composto por três processos e
 Browser → React/Vite → FastAPI → PostgreSQL
 ```
 
-O backend separa transporte HTTP (`api`), configuração transversal (`core`), persistência (`db`, `models`, `repositories`) e regras (`services`, `simulation`, `analytics`, `ml`). Os módulos compartilham um único processo e um único banco.
+O backend separa transporte HTTP (`api`), configuração transversal (`core`), acesso
+ao banco (`db`), persistência (`models`), contratos (`schemas`) e regras de domínio
+(`services`). Os pacotes `repositories`, `simulation`, `analytics` e `ml` já reservam
+as fronteiras previstas no `SPEC.md`, mas ainda não possuem implementação funcional.
+Todos os módulos compartilham um único processo e um único banco.
 
 ## Fronteiras
 
-- Rotas validam HTTP e delegam comportamento.
-- Serviços concentram regras de negócio e invariantes.
-- Repositórios isolam consultas e persistência.
+- Rotas usam schemas Pydantic para validar HTTP e, no estado atual, executam CRUD e
+  consultas simples diretamente pela `Session` do SQLAlchemy.
+- O serviço `services/charging_sessions.py` concentra as regras existentes de início
+  e encerramento da sessão: usuário ativo, propriedade do veículo, disponibilidade
+  do carregador, exclusividade de sessão ativa, potência solicitada, cálculo final,
+  invoice e alerta.
+- `api/routes/common.py` centraliza a injeção da sessão de banco, busca com resposta
+  404 e commit com conversão de conflito de integridade para HTTP 409.
+- O pacote `repositories` está vazio. Repositórios serão adicionados quando consultas
+  repetidas ou complexas exigirem essa separação; não são uma camada ativa hoje.
 - Modelos representam persistência; schemas representam contratos da API.
-- O simulador será uma fonte de dados substituível, não o proprietário do domínio.
-- ML será consultivo e nunca substituirá restrições energéticas determinísticas.
+- `simulation` será uma fonte de dados substituível, não o proprietário do domínio.
+- `analytics` e `ml` ainda serão implementados; ML permanecerá consultivo e nunca
+  substituirá restrições energéticas determinísticas.
+
+## Fluxo implementado de sessão
+
+```text
+HTTP /api/v1/sessions
+        ↓
+schemas Pydantic + carregamento das entidades
+        ↓
+serviço de sessões (regras e alterações da transação)
+        ↓
+commit na rota
+        ↓
+SQLAlchemy models → PostgreSQL
+```
+
+As demais rotas seguem, por enquanto, o fluxo direto
+`rota → Session SQLAlchemy → models → PostgreSQL`. Regras novas não devem ser
+acrescentadas a esse fluxo: quando houver regra de negócio, ela deve ser movida para
+um serviço testável.
 
 ## Decisões da fundação
 
@@ -24,6 +55,7 @@ O backend separa transporte HTTP (`api`), configuração transversal (`core`), p
 - Alterações de schema são versionadas por Alembic.
 - PostgreSQL 16 é o banco de desenvolvimento e produção do MVP.
 - O frontend consome a URL configurável `VITE_API_URL`.
-- Datas futuras serão armazenadas em UTC, IDs serão UUID e dinheiro usará tipos decimais.
+- Datas são armazenadas em UTC, IDs usam UUID e valores monetários usam tipos
+  decimais.
 
 Consulte `SPEC.md` para regras funcionais e precedência de requisitos.
