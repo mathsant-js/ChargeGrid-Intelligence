@@ -5,6 +5,7 @@ from app.api.routes.billing import router as billing_router
 from app.api.routes.chargers import router as chargers_router
 from app.api.routes.energy import router as energy_router
 from app.api.routes.health import router as health_router
+from app.api.routes.predictions import configuration_router, predictions_router
 from app.api.routes.sessions import router as sessions_router
 from app.api.routes.solar import router as solar_router
 from app.api.routes.stations import router as stations_router
@@ -22,3 +23,5 @@ api_router.include_router(energy_router)
 api_router.include_router(solar_router)
 api_router.include_router(billing_router)
 api_router.include_router(alerts_router)
+api_router.include_router(predictions_router)
+api_router.include_router(configuration_router)

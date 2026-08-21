@@ -22,3 +22,5 @@ async def test_openapi_is_available() -> None:
     assert "/api/v1/energy/history" in paths
     assert "/api/v1/solar/current" in paths
     assert "/api/v1/solar/history" in paths
+    assert "/api/v1/predictions/demand" in paths
+    assert "/api/v1/system-configuration" in paths
