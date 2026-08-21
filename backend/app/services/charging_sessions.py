@@ -5,6 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.alert import Alert, AlertSeverity, AlertType
+from app.models.billing import Invoice, InvoiceStatus
 from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargerStatus
 from app.models.user import User
@@ -66,11 +68,36 @@ def start_charging_session(
     return session
 
 
-def stop_charging_session(session: ChargingSession, charger: Charger) -> None:
+def stop_charging_session(db: Session, session: ChargingSession, charger: Charger) -> None:
     if session.status not in (ChargingSessionStatus.CHARGING, ChargingSessionStatus.PAUSED):
         raise HTTPException(status.HTTP_409_CONFLICT, "Session cannot be stopped")
     session.status = ChargingSessionStatus.COMPLETED
-    session.ended_at = datetime.now(UTC)
+    closed_at = datetime.now(UTC)
+    session.ended_at = closed_at
     session.allocated_power_kw = 0
-    session.total_cost = Decimal(str(session.energy_consumed_kwh)) * session.tariff_per_kwh
+    subtotal = (Decimal(str(session.energy_consumed_kwh)) * session.tariff_per_kwh).quantize(
+        Decimal("0.01")
+    )
+    session.total_cost = subtotal
     charger.status = ChargerStatus.AVAILABLE
+    db.add(
+        Invoice(
+            session_id=session.id,
+            user_id=session.user_id,
+            energy_kwh=Decimal(str(session.energy_consumed_kwh)),
+            tariff_per_kwh=session.tariff_per_kwh,
+            subtotal=subtotal,
+            total=subtotal,
+            status=InvoiceStatus.CLOSED,
+            closed_at=closed_at,
+        )
+    )
+    db.add(
+        Alert(
+            station_id=charger.station_id,
+            type=AlertType.SESSION_FINISHED,
+            severity=AlertSeverity.INFO,
+            title="Charging session finished",
+            message=f"Charging session {session.id} finished successfully.",
+        )
+    )

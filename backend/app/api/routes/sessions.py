@@ -44,7 +44,7 @@ async def start_session(payload: ChargingSessionStart, db: DbSession) -> Chargin
 async def stop_session(session_id: UUID, db: DbSession) -> ChargingSession:
     session = get_or_404(db, ChargingSession, session_id)
     charger = get_or_404(db, Charger, session.charger_id)
-    stop_charging_session(session, charger)
+    stop_charging_session(db, session, charger)
     commit_or_conflict(db, "Charging session could not be stopped")
     db.refresh(session)
     return session
