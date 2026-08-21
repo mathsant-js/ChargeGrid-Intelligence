@@ -49,7 +49,7 @@ async def test_user_crud_hashes_password_and_never_exposes_it(
     detail = await client.get(f"/api/v1/users/{created['id']}")
     listing = await client.get("/api/v1/users")
     assert detail.status_code == 200
-    assert listing.json() == [detail.json()]
+    assert detail.json() in listing.json()
 
 
 @pytest.mark.anyio

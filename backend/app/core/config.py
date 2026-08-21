@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,11 @@ class Settings(BaseSettings):
     app_cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"
+    jwt_secret_key: str = Field(
+        default="development-only-change-me-minimum-32-bytes", min_length=32
+    )
+    jwt_expiration_minutes: int = Field(default=60, gt=0)
+    jwt_algorithm: Literal["HS256"] = "HS256"
 
 
 @lru_cache

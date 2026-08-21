@@ -2,6 +2,12 @@ import base64
 import hashlib
 import hmac
 import os
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
+
+import jwt
+
+from app.core.config import get_settings
 
 SCRYPT_N = 2**14
 SCRYPT_R = 8
@@ -41,3 +47,31 @@ def verify_password(password: str, encoded_hash: str) -> bool:
         return hmac.compare_digest(actual, base64.b64decode(expected_text))
     except (ValueError, TypeError):
         return False
+
+
+def create_access_token(user_id: UUID, *, expires_delta: timedelta | None = None) -> str:
+    settings = get_settings()
+    expires_at = datetime.now(UTC) + (
+        expires_delta or timedelta(minutes=settings.jwt_expiration_minutes)
+    )
+    return jwt.encode(
+        {"sub": str(user_id), "exp": expires_at, "type": "access"},
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def decode_access_token(token: str) -> UUID:
+    settings = get_settings()
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["sub", "exp"]},
+    )
+    if payload.get("type") != "access":
+        raise jwt.InvalidTokenError("Invalid token type")
+    try:
+        return UUID(payload["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise jwt.InvalidTokenError("Invalid subject") from exc

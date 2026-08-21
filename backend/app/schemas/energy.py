@@ -13,7 +13,6 @@ NonNegativeMoney = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=
 
 
 class ChargingSessionStart(BaseModel):
-    user_id: UUID
     vehicle_id: UUID
     charger_id: UUID
     tariff_per_kwh: NonNegativeMoney

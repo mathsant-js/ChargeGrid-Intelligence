@@ -6,7 +6,7 @@ from app.schemas.common import LicensePlate, Name, ORMResponse, PositivePower
 
 
 class VehicleCreate(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
     name: Name
     brand: Name
     model: Name

@@ -1,23 +1,24 @@
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from app.api.dependencies import AdminUser, CurrentUser
 from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
 from app.core.security import hash_password
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserResponse])
-async def list_users(db: DbSession) -> list[User]:
+async def list_users(db: DbSession, _: AdminUser) -> list[User]:
     return list(db.scalars(select(User).order_by(User.created_at, User.id)).all())
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(payload: UserCreate, db: DbSession) -> User:
+async def create_user(payload: UserCreate, db: DbSession, _: AdminUser) -> User:
     user = User(
         name=payload.name,
         email=payload.email,
@@ -32,12 +33,20 @@ async def create_user(payload: UserCreate, db: DbSession) -> User:
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: UUID, db: DbSession) -> User:
+async def get_user(user_id: UUID, db: DbSession, current_user: CurrentUser) -> User:
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
     return get_or_404(db, User, user_id)
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(payload: UserUpdate, user_id: UUID, db: DbSession) -> User:
+async def update_user(
+    payload: UserUpdate, user_id: UUID, db: DbSession, current_user: CurrentUser
+) -> User:
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    if current_user.role != UserRole.ADMIN and "role" in payload.model_fields_set:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Role cannot be changed")
     user = get_or_404(db, User, user_id)
     changes = payload.model_dump(exclude_unset=True, exclude={"password"})
     for field, value in changes.items():

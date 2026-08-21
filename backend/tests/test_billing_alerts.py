@@ -51,7 +51,6 @@ async def test_stopping_session_creates_closed_invoice_and_alert(
     started = await client.post(
         "/api/v1/sessions/start",
         json={
-            "user_id": user["id"],
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
             "tariff_per_kwh": "0.92",

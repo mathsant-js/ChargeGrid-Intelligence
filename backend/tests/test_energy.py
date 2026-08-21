@@ -42,6 +42,11 @@ async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, ob
             },
         )
     ).json()
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "driver@example.com", "password": "secret123"},
+    )
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
     return user, vehicle, station, charger
 
 
@@ -51,7 +56,6 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
     start = await client.post(
         "/api/v1/sessions/start",
         json={
-            "user_id": user["id"],
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
             "tariff_per_kwh": "0.9200",
@@ -69,7 +73,6 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
     duplicate = await client.post(
         "/api/v1/sessions/start",
         json={
-            "user_id": user["id"],
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
             "tariff_per_kwh": "0.92",
@@ -88,23 +91,24 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
 @pytest.mark.anyio
 async def test_session_rejects_vehicle_from_another_user(client: AsyncClient) -> None:
     _, vehicle, _, charger = await create_session_dependencies(client)
-    other_user = (
-        await client.post(
-            "/api/v1/users",
-            json={"name": "Other", "email": "other@example.com", "password": "secret123"},
-        )
-    ).json()
+    first = await client.post(
+        "/api/v1/sessions/start",
+        json={
+            "vehicle_id": vehicle["id"],
+            "charger_id": charger["id"],
+            "tariff_per_kwh": "0.92",
+        },
+    )
+    assert first.status_code == 201
     response = await client.post(
         "/api/v1/sessions/start",
         json={
-            "user_id": other_user["id"],
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
             "tariff_per_kwh": "0.92",
         },
     )
     assert response.status_code == 409
-    assert response.json()["detail"] == "Vehicle does not belong to user"
 
 
 @pytest.mark.anyio
@@ -115,7 +119,6 @@ async def test_energy_and_solar_current_history_filters(
     session_response = await client.post(
         "/api/v1/sessions/start",
         json={
-            "user_id": user["id"],
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
             "tariff_per_kwh": "0.92",

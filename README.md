@@ -66,6 +66,7 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Instruções para agentes](AGENTS.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
+- [Fase 2 — Autenticação e autorização](docs/PHASE_2.md)
 
 ## Estado atual
 
@@ -76,7 +77,7 @@ invoices, alertas, previsões de demanda e configuração do sistema. O início 
 encerramento de sessões já aplicam regras de domínio, incluindo disponibilidade,
 potência solicitada, billing e alerta de conclusão.
 
-O frontend ainda é o shell da fundação com monitoramento online/offline da API. As
-próximas entregas devem completar simulação, cálculo energético, gestão de potência e
-prioridade solar antes dos dashboards e do pipeline de Machine Learning. Consulte a
-seção de continuidade em [Fase 1 — Fundação (concluída)](docs/PHASE_1.md).
+O backend também possui login JWT e autorização mínima por papel e propriedade. A
+Fase 2 ainda não é declarada concluída: esta fatia cobre autenticação e limites de
+acesso, e as próximas fatias devem seguir os critérios documentados em
+[Fase 2 — Autenticação e autorização](docs/PHASE_2.md).

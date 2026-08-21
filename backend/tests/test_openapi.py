@@ -12,6 +12,8 @@ async def test_openapi_is_available() -> None:
     assert response.status_code == 200
     paths = response.json()["paths"]
     assert "/api/v1/health" in paths
+    assert "/api/v1/auth/login" in paths
+    assert "/api/v1/auth/me" in paths
     assert "/api/v1/users" in paths
     assert "/api/v1/vehicles" in paths
     assert "/api/v1/stations" in paths

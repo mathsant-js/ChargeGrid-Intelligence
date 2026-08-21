@@ -7,9 +7,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models as _models  # noqa: F401
+from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app as api_app
+from app.models.user import User, UserRole
+
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "admin-password"
 
 
 @pytest.fixture
@@ -50,7 +55,23 @@ async def client(test_engine: Engine) -> AsyncIterator[AsyncClient]:
         with Session(test_engine, expire_on_commit=False) as session:
             yield session
 
+    with Session(test_engine, expire_on_commit=False) as session:
+        session.add(
+            User(
+                name="Test Admin",
+                email=ADMIN_EMAIL,
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+        )
+        session.commit()
+
     api_app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as value:
+        login = await value.post(
+            "/api/v1/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
+        value.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
         yield value
     api_app.dependency_overrides.clear()

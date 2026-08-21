@@ -23,6 +23,9 @@ services:
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_CORS_ORIGINS: '${APP_CORS_ORIGINS:-["http://localhost:5173"]}'
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chargegrid}:${POSTGRES_PASSWORD:-chargegrid}@db:5432/${POSTGRES_DB:-chargegrid}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-change-me-minimum-32-bytes}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       db:

@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from app.api.dependencies import CurrentUser
 from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
 from app.models.energy import ChargingSession
 from app.models.infrastructure import Charger
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
 from app.schemas.energy import ChargingSessionResponse, ChargingSessionStart
 from app.services.charging_sessions import start_charging_session, stop_charging_session
@@ -15,23 +16,35 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.get("", response_model=list[ChargingSessionResponse])
-async def list_sessions(db: DbSession) -> list[ChargingSession]:
+async def list_sessions(db: DbSession, current_user: CurrentUser) -> list[ChargingSession]:
+    statement = select(ChargingSession)
+    if current_user.role != UserRole.ADMIN:
+        statement = statement.where(ChargingSession.user_id == current_user.id)
     return list(
-        db.scalars(select(ChargingSession).order_by(ChargingSession.created_at, ChargingSession.id))
+        db.scalars(statement.order_by(ChargingSession.created_at, ChargingSession.id))
     )
 
 
 @router.get("/{session_id}", response_model=ChargingSessionResponse)
-async def get_session(session_id: UUID, db: DbSession) -> ChargingSession:
-    return get_or_404(db, ChargingSession, session_id)
+async def get_session(
+    session_id: UUID, db: DbSession, current_user: CurrentUser
+) -> ChargingSession:
+    session = get_or_404(db, ChargingSession, session_id)
+    ensure_session_access(session, current_user)
+    return session
 
 
 @router.post("/start", response_model=ChargingSessionResponse, status_code=status.HTTP_201_CREATED)
-async def start_session(payload: ChargingSessionStart, db: DbSession) -> ChargingSession:
+async def start_session(
+    payload: ChargingSessionStart, db: DbSession, current_user: CurrentUser
+) -> ChargingSession:
+    vehicle = get_or_404(db, Vehicle, payload.vehicle_id)
+    if vehicle.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
     session = start_charging_session(
         db,
-        user=get_or_404(db, User, payload.user_id),
-        vehicle=get_or_404(db, Vehicle, payload.vehicle_id),
+        user=current_user,
+        vehicle=vehicle,
         charger=get_or_404(db, Charger, payload.charger_id),
         tariff_per_kwh=payload.tariff_per_kwh,
     )
@@ -41,10 +54,18 @@ async def start_session(payload: ChargingSessionStart, db: DbSession) -> Chargin
 
 
 @router.post("/{session_id}/stop", response_model=ChargingSessionResponse)
-async def stop_session(session_id: UUID, db: DbSession) -> ChargingSession:
+async def stop_session(
+    session_id: UUID, db: DbSession, current_user: CurrentUser
+) -> ChargingSession:
     session = get_or_404(db, ChargingSession, session_id)
+    ensure_session_access(session, current_user)
     charger = get_or_404(db, Charger, session.charger_id)
     stop_charging_session(db, session, charger)
     commit_or_conflict(db, "Charging session could not be stopped")
     db.refresh(session)
     return session
+
+
+def ensure_session_access(session: ChargingSession, current_user: User) -> None:
+    if current_user.role != UserRole.ADMIN and session.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
