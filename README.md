@@ -70,6 +70,14 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 
 ## Estado atual
 
+### Demonstração do vídeo pitch (`primeira_apresentacao_28_08`)
+
+A página inicial oferece uma simulação acelerada e autocontida para apresentar os três
+entregáveis da primeira avaliação: distribuição inteligente de potência com proteção do
+limite da rede, acompanhamento e fechamento da cobrança pay-per-use e uma interface de
+recarga com quatro veículos. Use **Iniciar simulação** e **Finalizar e cobrar** para
+percorrer o roteiro da apresentação. Não é necessário login para esta tela demonstrativa.
+
 A Fase 1 está concluída e seus critérios de saída estão documentados com evidências.
 Além da fundação técnica, o backend já expõe APIs e persistência para usuários,
 veículos, estações, carregadores, sessões, leituras de energia e solar, tarifas,

@@ -1,61 +1,30 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { FoundationPage } from './FoundationPage'
 
 describe('FoundationPage', () => {
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
+  afterEach(cleanup)
+
+  it('shows the three pitch deliverables', () => {
+    render(<MemoryRouter><FoundationPage /></MemoryRouter>)
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Operação inteligente de recarga')
+    expect(screen.getByText('Gerenciamento de demanda')).toBeInTheDocument()
+    expect(screen.getByText('Cobrança em tempo real')).toBeInTheDocument()
+    expect(screen.getByText('Recargas inteligentes')).toBeInTheDocument()
   })
 
-  it('shows the configured foundation and the healthy API state', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
-    )
+  it('starts and finishes the accelerated simulation', () => {
+    render(<MemoryRouter><FoundationPage /></MemoryRouter>)
 
-    render(
-      <MemoryRouter>
-        <FoundationPage />
-      </MemoryRouter>,
-    )
+    fireEvent.click(screen.getByRole('button', { name: /iniciar simulação/i }))
+    expect(screen.getByText('Simulação em execução')).toBeInTheDocument()
+    expect(screen.getAllByText('Carregando')).toHaveLength(4)
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Energia de recarga transformada em decisões inteligentes.',
-    )
-    expect(await screen.findByText('API operacional')).toBeInTheDocument()
-    expect(screen.getByText('PostgreSQL + Alembic')).toBeInTheDocument()
-  })
-
-  it('shows an unavailable state when the API request fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network error'))
-
-    render(
-      <MemoryRouter>
-        <FoundationPage />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('API indisponível')).toBeInTheDocument()
-  })
-
-  it('shows the charging session result after starting the academic demo', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
-    )
-
-    render(
-      <MemoryRouter>
-        <FoundationPage />
-      </MemoryRouter>,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Simular início da recarga' }))
-
-    expect(screen.getByText('Recarga iniciada')).toBeInTheDocument()
-    expect(screen.getByText('Status: Carregando')).toBeInTheDocument()
-    expect(screen.getByText('11 kW')).toBeInTheDocument()
-    expect(screen.getByText('CH-01')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /finalizar e cobrar/i }))
+    expect(screen.getByText('Invoice fechada')).toBeInTheDocument()
+    expect(screen.getAllByText('Concluída')).toHaveLength(4)
   })
 })

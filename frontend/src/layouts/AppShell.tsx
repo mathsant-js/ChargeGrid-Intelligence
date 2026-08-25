@@ -8,7 +8,7 @@ export function AppShell({ children }: PropsWithChildren) {
           <span className="brand__mark">CG</span>
           <span>ChargeGrid Intelligence</span>
         </a>
-        <span className="phase">Fase 1 · Fundação</span>
+        <span className="phase">Demo · Vídeo pitch</span>
       </header>
       <main>{children}</main>
     </div>
