@@ -6,8 +6,8 @@
 
 A Fase 2 entrega o domínio de usuários, autenticação, veículos, estações,
 carregadores e sessões previsto no `SPEC.md` e no roadmap do `BRIEFING.md`.
-A validação final foi executada com a árvore de trabalho limpa como linha de base e
-repetida após a correção da constraint de estados de sessão.
+A validação descrita abaixo foi atualizada em 01/09/2026 para refletir o estado
+atual do repositório.
 
 ## Itens entregues
 
@@ -57,13 +57,15 @@ A cadeia Alembic possui uma única head:
 - `20260818_0002`: users, vehicles, charging stations e chargers;
 - `20260818_0003`: charging sessions (além de tabelas preparatórias já existentes);
 - `20260831_0006`: constraints de `UserRole` e `ChargerStatus`;
-- `20260831_0007`: constraint de `ChargingSessionStatus`.
+- `20260831_0007`: constraint de `ChargingSessionStatus`;
+- `20260901_0008`: índices únicos parciais que impedem sessões ativas concorrentes
+  para o mesmo carregador ou veículo.
 
 As revisions intermediárias `0004` e `0005` já existiam na cadeia antes desta
-validação e não foram ampliadas. `alembic heads` retornou somente
-`20260831_0007 (head)` e a geração SQL offline do upgrade completo para PostgreSQL
-foi concluída. A aplicação contra um PostgreSQL ativo não foi repetida porque
-`docker compose ps` confirmou que nenhum serviço do projeto estava em execução.
+validação e não foram ampliadas. Em 01/09/2026, `alembic heads` retornou somente
+`20260901_0008 (head)` e a geração SQL offline do upgrade completo para PostgreSQL
+foi concluída. A aplicação contra um PostgreSQL ativo não foi validada nesta
+execução porque o acesso ao daemon Docker foi negado.
 
 ## Checklist objetiva de saída
 
@@ -78,12 +80,12 @@ foi concluída. A aplicação contra um PostgreSQL ativo não foi repetida porqu
   potência solicitada e estados terminais — cobertos por
   `test_charging_session_domain.py`.
 - [x] **Persistência:** UUIDs, timestamps, FKs, checks positivos e constraints dos
-  enums da Fase 2 — 43 testes backend passaram; migration `0007` possui teste de
-  regressão da metadata.
+  enums da Fase 2, além dos índices únicos parciais da migration `0008` para
+  sessões ativas concorrentes — cobertos pela suíte backend atual.
 - [x] **API/OpenAPI:** 27 paths gerados em OpenAPI 3.1.0; todos os endpoints exigidos
   de Auth, Users, Vehicles, Stations, Chargers e Sessions estão presentes e têm a
   segurança esperada — coberto por `test_openapi.py` e inspeção do schema gerado.
-- [x] **Qualidade backend:** Ruff e mypy strict passaram; pytest passou com 43 testes
+- [x] **Qualidade backend:** Ruff e mypy strict passaram; pytest passou com 72 testes
   e 97% de cobertura total.
 - [x] **Frontend preservado:** ESLint, TypeScript, 2 testes Vitest e build Vite de
   produção passaram.
