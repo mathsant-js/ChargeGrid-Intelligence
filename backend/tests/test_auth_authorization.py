@@ -81,16 +81,32 @@ async def test_login_valid_invalid_inactive_and_me(
 async def test_missing_invalid_and_expired_tokens(client: AsyncClient, db_session: Session) -> None:
     user = add_user(db_session, email="token@example.com")
     client.headers.pop("Authorization")
-    assert (await client.get("/api/v1/auth/me")).status_code == 401
-    assert (
-        await client.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid"})
-    ).status_code == 401
+    missing = await client.get("/api/v1/auth/me")
+    invalid = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": "Bearer invalid"}
+    )
     expired = create_access_token(user.id, expires_delta=timedelta(seconds=-1))
-    assert (
-        await client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"}
-        )
-    ).status_code == 401
+    expired_response = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"}
+    )
+    for response in (missing, invalid, expired_response):
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.anyio
+async def test_token_stops_working_when_account_becomes_inactive(
+    client: AsyncClient, db_session: Session
+) -> None:
+    user = add_user(db_session, email="deactivated@example.com")
+    headers = await login_headers(client, user.email)
+    user.is_active = False
+    db_session.commit()
+
+    response = await client.get("/api/v1/auth/me", headers=headers)
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
 
 
 @pytest.mark.anyio
@@ -106,6 +122,16 @@ async def test_user_admin_boundaries_and_role_protection(
             "/api/v1/users",
             headers=headers,
             json={"name": "No", "email": "no@example.com", "password": "password-123"},
+        )
+    ).status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/stations/{uuid4()}", headers=headers, json={"name": "No"}
+        )
+    ).status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/chargers/{uuid4()}", headers=headers, json={"name": "No"}
         )
     ).status_code == 403
     assert (
@@ -131,6 +157,29 @@ async def test_user_admin_boundaries_and_role_protection(
     assert role_change.status_code == 403
     db_session.refresh(user)
     assert user.role == UserRole.USER
+
+
+@pytest.mark.anyio
+async def test_user_can_read_and_update_only_own_profile(
+    client: AsyncClient, db_session: Session
+) -> None:
+    first = add_user(db_session, email="profile-first@example.com")
+    second = add_user(db_session, email="profile-second@example.com")
+    headers = await login_headers(client, first.email)
+
+    own = await client.get(f"/api/v1/users/{first.id}", headers=headers)
+    updated = await client.patch(
+        f"/api/v1/users/{first.id}", headers=headers, json={"name": "Updated profile"}
+    )
+    other_get = await client.get(f"/api/v1/users/{second.id}", headers=headers)
+    other_patch = await client.patch(
+        f"/api/v1/users/{second.id}", headers=headers, json={"name": "IDOR"}
+    )
+
+    assert own.status_code == updated.status_code == 200
+    assert updated.json()["name"] == "Updated profile"
+    assert other_get.status_code == other_patch.status_code == 404
+    assert other_get.json() == other_patch.json() == {"detail": "Resource not found"}
 
 
 @pytest.mark.anyio
@@ -174,6 +223,14 @@ async def test_vehicle_and_session_ownership_and_admin_global_access(
     assert own_vehicle_response.status_code == 201
     own_vehicle = own_vehicle_response.json()
     assert own_vehicle["user_id"] == str(first.id)
+    assert (await client.get("/api/v1/stations", headers=first_headers)).status_code == 200
+    assert (
+        await client.get(f"/api/v1/stations/{station['id']}", headers=first_headers)
+    ).status_code == 200
+    assert (await client.get("/api/v1/chargers", headers=first_headers)).status_code == 200
+    assert (
+        await client.get(f"/api/v1/chargers/{charger['id']}", headers=first_headers)
+    ).status_code == 200
 
     second_headers = await login_headers(client, second.email)
     other_vehicle = (
@@ -203,6 +260,19 @@ async def test_vehicle_and_session_ownership_and_admin_global_access(
     assert (
         await client.delete(f"/api/v1/vehicles/{other_vehicle['id']}", headers=first_headers)
     ).status_code == 404
+    assert (
+        await client.patch(
+            f"/api/v1/vehicles/{other_vehicle['id']}",
+            headers=first_headers,
+            json={"name": "IDOR"},
+        )
+    ).status_code == 404
+    owner_change = await client.patch(
+        f"/api/v1/vehicles/{own_vehicle['id']}",
+        headers=first_headers,
+        json={"user_id": str(second.id)},
+    )
+    assert owner_change.status_code == 403
 
     started = await client.post(
         "/api/v1/sessions/start",
@@ -246,4 +316,46 @@ async def test_vehicle_and_session_ownership_and_admin_global_access(
     users = await client.get("/api/v1/users", headers=admin_headers)
     assert users.status_code == 200
     assert all("password_hash" not in item for item in users.json())
+    assert (
+        await client.post(
+            "/api/v1/vehicles",
+            headers=admin_headers,
+            json={
+                "user_id": str(first.id),
+                "name": "Admin EV",
+                "brand": "Brand",
+                "model": "Admin",
+                "license_plate": "ADMIN-1",
+                "max_charge_power_kw": 11,
+            },
+        )
+    ).status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/vehicles/{own_vehicle['id']}",
+            headers=admin_headers,
+            json={"name": "Admin mutation"},
+        )
+    ).status_code == 403
+    assert (
+        await client.delete(
+            f"/api/v1/vehicles/{own_vehicle['id']}", headers=admin_headers
+        )
+    ).status_code == 403
+    assert (
+        await client.post(
+            f"/api/v1/sessions/{started.json()['id']}/stop", headers=admin_headers
+        )
+    ).status_code == 403
+    assert (
+        await client.post(
+            "/api/v1/sessions/start",
+            headers=admin_headers,
+            json={
+                "vehicle_id": own_vehicle["id"],
+                "charger_id": charger["id"],
+                "tariff_per_kwh": "0.92",
+            },
+        )
+    ).status_code == 403
     assert db_session.scalar(select(User).where(User.id == first.id)) is not None

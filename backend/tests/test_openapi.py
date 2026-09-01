@@ -26,3 +26,34 @@ async def test_openapi_is_available() -> None:
     assert "/api/v1/solar/history" in paths
     assert "/api/v1/predictions/demand" in paths
     assert "/api/v1/system-configuration" in paths
+
+    bearer = [{"HTTPBearer": []}]
+    protected_operations = {
+        ("/api/v1/auth/me", "get"),
+        ("/api/v1/users", "get"),
+        ("/api/v1/users", "post"),
+        ("/api/v1/users/{user_id}", "get"),
+        ("/api/v1/users/{user_id}", "patch"),
+        ("/api/v1/vehicles", "get"),
+        ("/api/v1/vehicles", "post"),
+        ("/api/v1/vehicles/{vehicle_id}", "get"),
+        ("/api/v1/vehicles/{vehicle_id}", "patch"),
+        ("/api/v1/vehicles/{vehicle_id}", "delete"),
+        ("/api/v1/stations", "get"),
+        ("/api/v1/stations", "post"),
+        ("/api/v1/stations/{station_id}", "get"),
+        ("/api/v1/stations/{station_id}", "patch"),
+        ("/api/v1/chargers", "get"),
+        ("/api/v1/chargers", "post"),
+        ("/api/v1/chargers/{charger_id}", "get"),
+        ("/api/v1/chargers/{charger_id}", "patch"),
+        ("/api/v1/sessions", "get"),
+        ("/api/v1/sessions/{session_id}", "get"),
+        ("/api/v1/sessions/start", "post"),
+        ("/api/v1/sessions/{session_id}/stop", "post"),
+    }
+    for path, method in protected_operations:
+        assert paths[path][method]["security"] == bearer
+
+    assert "security" not in paths["/api/v1/health"]["get"]
+    assert "security" not in paths["/api/v1/auth/login"]["post"]

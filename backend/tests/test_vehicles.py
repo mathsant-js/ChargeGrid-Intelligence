@@ -12,9 +12,19 @@ async def create_user(client: AsyncClient) -> str:
     return str(response.json()["id"])
 
 
+async def authenticate_owner(client: AsyncClient) -> str:
+    user_id = await create_user(client)
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner@example.com", "password": "password-123"},
+    )
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+    return user_id
+
+
 @pytest.mark.anyio
 async def test_vehicle_crud(client: AsyncClient) -> None:
-    user_id = await create_user(client)
+    user_id = await authenticate_owner(client)
     response = await client.post(
         "/api/v1/vehicles",
         json={
@@ -45,7 +55,10 @@ async def test_vehicle_crud(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_vehicle_validates_owner_and_positive_power(client: AsyncClient) -> None:
+async def test_vehicle_ignores_body_owner_and_validates_positive_power(
+    client: AsyncClient,
+) -> None:
+    user_id = await authenticate_owner(client)
     payload: dict[str, object] = {
         "user_id": str(uuid4()),
         "name": "EV",
@@ -54,8 +67,10 @@ async def test_vehicle_validates_owner_and_positive_power(client: AsyncClient) -
         "license_plate": "ABC-1234",
         "max_charge_power_kw": 22,
     }
-    assert (await client.post("/api/v1/vehicles", json=payload)).status_code == 404
+    created = await client.post("/api/v1/vehicles", json=payload)
+    assert created.status_code == 201
+    assert created.json()["user_id"] == user_id
 
-    payload["user_id"] = await create_user(client)
+    payload["license_plate"] = "ABC-9999"
     payload["max_charge_power_kw"] = 0
     assert (await client.post("/api/v1/vehicles", json=payload)).status_code == 422

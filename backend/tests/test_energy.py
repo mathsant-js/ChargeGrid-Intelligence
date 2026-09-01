@@ -9,12 +9,19 @@ from app.models.energy import ChargingSession, EnergyReading, SolarReading
 
 
 async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, object], ...]:
+    admin_authorization = client.headers["Authorization"]
     user = (
         await client.post(
             "/api/v1/users",
             json={"name": "Driver", "email": "driver@example.com", "password": "secret123"},
         )
     ).json()
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "driver@example.com", "password": "secret123"},
+    )
+    user_authorization = f"Bearer {login.json()['access_token']}"
+    client.headers["Authorization"] = user_authorization
     vehicle = (
         await client.post(
             "/api/v1/vehicles",
@@ -28,6 +35,7 @@ async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, ob
             },
         )
     ).json()
+    client.headers["Authorization"] = admin_authorization
     station = (
         await client.post("/api/v1/stations", json={"name": "Station", "grid_limit_kw": 60})
     ).json()
@@ -42,11 +50,7 @@ async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, ob
             },
         )
     ).json()
-    login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "driver@example.com", "password": "secret123"},
-    )
-    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+    client.headers["Authorization"] = user_authorization
     return user, vehicle, station, charger
 
 

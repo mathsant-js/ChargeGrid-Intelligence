@@ -13,22 +13,34 @@ de produção.
 
 ## Política de acesso
 
-- `ADMIN` lista, cria e altera usuários e cria ou altera estações e carregadores.
+- `ADMIN` lista, cria e altera usuários e cria ou altera estações e carregadores;
+- `ADMIN` consulta globalmente usuários, veículos e sessões, mas não executa as
+  operações de motorista sobre veículos e sessões;
 - `USER` consulta e altera seu próprio usuário, mas não pode alterar `role`.
+- `USER` cria, consulta, altera e exclui somente os próprios veículos;
+- `USER` consulta estações e carregadores necessários ao início da recarga, sem
+  permissão para alterá-los;
+- `USER` inicia, consulta e encerra somente as próprias sessões;
 - veículos e sessões de um `USER` são filtrados pelo usuário autenticado;
 - recursos pertencentes a outro usuário respondem `404`, evitando confirmar sua
   existência;
 - uma operação administrativa feita por `USER` responde `403`;
 - credenciais inválidas e contas inativas respondem igualmente `401`, sem revelar
   se a conta existe ou está desativada;
-- o início de sessão deriva `user_id` do JWT e não confia no valor enviado pelo
-  cliente.
+- operações autenticadas derivam `user_id` do JWT; em particular, a criação de
+  veículo e o início de sessão não confiam em proprietário enviado pelo cliente.
 
 Tokens ausentes, inválidos ou expirados respondem `401` com o desafio Bearer. Nenhuma
 resposta pública inclui `password_hash`.
 
+## OpenAPI
+
+Todos os endpoints desta fase, exceto `POST /api/v1/auth/login`, declaram o esquema
+`HTTPBearer` no OpenAPI. O endpoint de health também permanece público.
+
 ## Estado da fase
 
-Esta é uma fatia vertical da Fase 2, não a declaração de conclusão da fase inteira.
-Os testes automatizados cobrem autenticação, expiração, papéis, propriedade e o vínculo
-da sessão ao usuário autenticado.
+A política de autenticação e autorização da Fase 2 está implementada. Os testes
+automatizados cobrem autenticação, expiração e desativação, papéis, propriedade,
+tentativas de IDOR, respostas `401`/`403`/`404` e o vínculo das operações ao usuário
+autenticado.

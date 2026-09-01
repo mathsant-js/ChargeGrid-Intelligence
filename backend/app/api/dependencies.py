@@ -40,3 +40,12 @@ async def require_admin(current_user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+async def require_user(current_user: CurrentUser) -> User:
+    if current_user.role != UserRole.USER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User role required")
+    return current_user
+
+
+RegularUser = Annotated[User, Depends(require_user)]

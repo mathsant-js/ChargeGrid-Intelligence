@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.dependencies import CurrentUser
+from app.api.dependencies import CurrentUser, RegularUser
 from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
 from app.models.energy import ChargingSession
 from app.models.infrastructure import Charger
@@ -41,7 +41,7 @@ async def get_session(
 
 @router.post("/start", response_model=ChargingSessionResponse, status_code=status.HTTP_201_CREATED)
 async def start_session(
-    payload: ChargingSessionStart, db: DbSession, current_user: CurrentUser
+    payload: ChargingSessionStart, db: DbSession, current_user: RegularUser
 ) -> ChargingSession:
     vehicle = get_or_404(db, Vehicle, payload.vehicle_id)
     if vehicle.user_id != current_user.id:
@@ -60,11 +60,10 @@ async def start_session(
 
 @router.post("/{session_id}/stop", response_model=ChargingSessionResponse)
 async def stop_session(
-    session_id: UUID, db: DbSession, current_user: CurrentUser
+    session_id: UUID, db: DbSession, current_user: RegularUser
 ) -> ChargingSession:
     session = get_or_404(db, ChargingSession, session_id)
-    if current_user.role != UserRole.ADMIN:
-        ensure_session_access(session, current_user)
+    ensure_session_access(session, current_user)
     charger = get_or_404(db, Charger, session.charger_id)
     stop_charging_session(db, session, charger)
     commit_or_conflict(db, "Charging session could not be stopped")
