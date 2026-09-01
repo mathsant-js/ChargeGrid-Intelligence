@@ -34,7 +34,7 @@ async def create_tariff(payload: TariffCreate, db: DbSession) -> Tariff:
     if tariff.is_active:
         deactivate_other_tariffs(db)
     db.add(tariff)
-    commit_or_conflict(db, "Tariff could not be created")
+    commit_or_conflict(db)
     db.refresh(tariff)
     return tariff
 
@@ -56,7 +56,7 @@ async def update_tariff(payload: TariffUpdate, tariff_id: UUID, db: DbSession) -
         deactivate_other_tariffs(db, tariff.id)
     for field, value in changes.items():
         setattr(tariff, field, value)
-    commit_or_conflict(db, "Tariff could not be updated")
+    commit_or_conflict(db)
     db.refresh(tariff)
     return tariff
 

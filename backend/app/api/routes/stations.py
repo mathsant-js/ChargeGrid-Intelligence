@@ -34,7 +34,7 @@ async def list_stations(db: DbSession, _: CurrentUser) -> list[ChargingStation]:
 async def create_station(payload: StationCreate, db: DbSession, _: AdminUser) -> ChargingStation:
     station = ChargingStation(**payload.model_dump())
     db.add(station)
-    commit_or_conflict(db, "Station could not be created")
+    commit_or_conflict(db)
     db.refresh(station)
     return station
 
@@ -61,6 +61,6 @@ async def update_station(
     station = get_or_404(db, ChargingStation, station_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(station, field, value)
-    commit_or_conflict(db, "Station could not be updated")
+    commit_or_conflict(db)
     db.refresh(station)
     return station

@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -46,9 +47,23 @@ def get_or_404[ModelT: Base](db: Session, model: type[ModelT], resource_id: UUID
     return instance
 
 
-def commit_or_conflict(db: Session, detail: str) -> None:
+def commit_or_conflict(
+    db: Session, constraint_details: Mapping[str, str] | None = None
+) -> None:
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
+        constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        error_text = str(exc.orig)
+        detail = next(
+            (
+                message
+                for constraint, message in (constraint_details or {}).items()
+                if constraint == constraint_name or constraint in error_text
+            ),
+            None,
+        )
+        if detail is None:
+            raise
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc

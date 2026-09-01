@@ -39,7 +39,7 @@ async def create_vehicle(
 ) -> Vehicle:
     vehicle = Vehicle(**payload.model_dump(exclude={"user_id"}), user_id=current_user.id)
     db.add(vehicle)
-    commit_or_conflict(db, "Vehicle could not be created")
+    commit_or_conflict(db)
     db.refresh(vehicle)
     return vehicle
 
@@ -72,7 +72,7 @@ async def update_vehicle(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner cannot be changed")
     for field, value in changes.items():
         setattr(vehicle, field, value)
-    commit_or_conflict(db, "Vehicle could not be updated")
+    commit_or_conflict(db)
     db.refresh(vehicle)
     return vehicle
 
@@ -88,7 +88,7 @@ async def delete_vehicle(vehicle_id: UUID, db: DbSession, current_user: RegularU
     vehicle = get_or_404(db, Vehicle, vehicle_id)
     ensure_vehicle_access(vehicle, current_user)
     db.delete(vehicle)
-    commit_or_conflict(db, "Vehicle cannot be deleted")
+    commit_or_conflict(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

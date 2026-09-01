@@ -36,7 +36,7 @@ async def create_charger(payload: ChargerCreate, db: DbSession, _: AdminUser) ->
     get_or_404(db, ChargingStation, payload.station_id)
     charger = Charger(**payload.model_dump())
     db.add(charger)
-    commit_or_conflict(db, "Charger could not be created")
+    commit_or_conflict(db)
     db.refresh(charger)
     return charger
 
@@ -66,6 +66,6 @@ async def update_charger(
         get_or_404(db, ChargingStation, changes["station_id"])
     for field, value in changes.items():
         setattr(charger, field, value)
-    commit_or_conflict(db, "Charger could not be updated")
+    commit_or_conflict(db)
     db.refresh(charger)
     return charger

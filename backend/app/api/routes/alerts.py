@@ -42,6 +42,6 @@ async def acknowledge_alert(alert_id: UUID, db: DbSession) -> Alert:
     alert = get_or_404(db, Alert, alert_id)
     if alert.acknowledged_at is None:
         alert.acknowledged_at = datetime.now(UTC)
-        commit_or_conflict(db, "Alert could not be acknowledged")
+        commit_or_conflict(db)
         db.refresh(alert)
     return alert

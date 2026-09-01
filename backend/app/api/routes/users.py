@@ -18,6 +18,10 @@ from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
+USER_EMAIL_CONFLICTS = {
+    "ix_users_email": "A user with this email already exists",
+    "users.email": "A user with this email already exists",
+}
 
 
 @router.get(
@@ -42,7 +46,7 @@ async def create_user(payload: UserCreate, db: DbSession, _: AdminUser) -> User:
         is_active=payload.is_active,
     )
     db.add(user)
-    commit_or_conflict(db, "A user with this email already exists")
+    commit_or_conflict(db, USER_EMAIL_CONFLICTS)
     db.refresh(user)
     return user
 
@@ -78,6 +82,6 @@ async def update_user(
         setattr(user, field, value)
     if "password" in payload.model_fields_set and payload.password is not None:
         user.password_hash = hash_password(payload.password.get_secret_value())
-    commit_or_conflict(db, "A user with this email already exists")
+    commit_or_conflict(db, USER_EMAIL_CONFLICTS)
     db.refresh(user)
     return user

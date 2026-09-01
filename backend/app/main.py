@@ -40,6 +40,19 @@ async def domain_not_found_handler(_: Request, exc: DomainResourceNotFoundError)
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
 
 
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "unexpected_request_error",
+        exc_info=exc,
+        extra={"method": request.method, "path": request.url.path},
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"},
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.app_cors_origins,

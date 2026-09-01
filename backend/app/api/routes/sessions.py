@@ -27,6 +27,12 @@ from app.services.charging_sessions import (
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 logger = logging.getLogger(__name__)
+ACTIVE_SESSION_CONFLICTS = {
+    "uq_charging_sessions_active_charger": "Charger already has an active session",
+    "charging_sessions.charger_id": "Charger already has an active session",
+    "uq_charging_sessions_active_vehicle": "Vehicle already has an active session",
+    "charging_sessions.vehicle_id": "Vehicle already has an active session",
+}
 
 
 @router.get("", response_model=list[ChargingSessionResponse], responses=UNAUTHORIZED_RESPONSE)
@@ -73,7 +79,7 @@ async def start_session(
         vehicle=vehicle,
         charger=get_or_404(db, Charger, payload.charger_id),
     )
-    commit_or_conflict(db, "Charging session could not be started")
+    commit_or_conflict(db, ACTIVE_SESSION_CONFLICTS)
     db.refresh(session)
     logger.info(
         "charging_session_started",
@@ -101,7 +107,7 @@ async def stop_session(
     ensure_session_access(session, current_user)
     charger = get_or_404(db, Charger, session.charger_id)
     stop_charging_session(db, session, charger)
-    commit_or_conflict(db, "Charging session could not be stopped")
+    commit_or_conflict(db)
     db.refresh(session)
     logger.info(
         "charging_session_finished",

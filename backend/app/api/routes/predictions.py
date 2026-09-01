@@ -46,7 +46,7 @@ async def create_demand_prediction(
     get_or_404(db, ChargingStation, payload.station_id)
     prediction = DemandPrediction(**payload.model_dump())
     db.add(prediction)
-    commit_or_conflict(db, "Prediction could not be created")
+    commit_or_conflict(db)
     db.refresh(prediction)
     return prediction
 
@@ -71,7 +71,7 @@ async def create_system_configuration(
         )
     configuration = SystemConfiguration(**payload.model_dump())
     db.add(configuration)
-    commit_or_conflict(db, "Configuration could not be created")
+    commit_or_conflict(db)
     db.refresh(configuration)
     return configuration
 
@@ -98,6 +98,6 @@ async def update_system_configuration(
         ) from exc
     for field, value in validated.model_dump().items():
         setattr(configuration, field, value)
-    commit_or_conflict(db, "Configuration could not be updated")
+    commit_or_conflict(db)
     db.refresh(configuration)
     return configuration
