@@ -57,3 +57,35 @@ async def test_openapi_is_available() -> None:
 
     assert "security" not in paths["/api/v1/health"]["get"]
     assert "security" not in paths["/api/v1/auth/login"]["post"]
+
+    expected_error_responses = {
+        ("/api/v1/auth/login", "post"): {"401"},
+        ("/api/v1/auth/me", "get"): {"401"},
+        ("/api/v1/users", "get"): {"401", "403"},
+        ("/api/v1/users", "post"): {"401", "403", "409"},
+        ("/api/v1/users/{user_id}", "get"): {"401", "404"},
+        ("/api/v1/users/{user_id}", "patch"): {"401", "403", "404", "409"},
+        ("/api/v1/vehicles", "get"): {"401"},
+        ("/api/v1/vehicles", "post"): {"401", "403", "409"},
+        ("/api/v1/vehicles/{vehicle_id}", "get"): {"401", "404"},
+        ("/api/v1/vehicles/{vehicle_id}", "patch"): {"401", "403", "404", "409"},
+        ("/api/v1/vehicles/{vehicle_id}", "delete"): {"401", "403", "404", "409"},
+        ("/api/v1/stations", "get"): {"401"},
+        ("/api/v1/stations", "post"): {"401", "403", "409"},
+        ("/api/v1/stations/{station_id}", "get"): {"401", "404"},
+        ("/api/v1/stations/{station_id}", "patch"): {"401", "403", "404", "409"},
+        ("/api/v1/chargers", "get"): {"401"},
+        ("/api/v1/chargers", "post"): {"401", "403", "404", "409"},
+        ("/api/v1/chargers/{charger_id}", "get"): {"401", "404"},
+        ("/api/v1/chargers/{charger_id}", "patch"): {"401", "403", "404", "409"},
+        ("/api/v1/sessions", "get"): {"401"},
+        ("/api/v1/sessions/{session_id}", "get"): {"401", "404"},
+        ("/api/v1/sessions/start", "post"): {"401", "403", "404", "409"},
+        ("/api/v1/sessions/{session_id}/stop", "post"): {"401", "403", "404", "409"},
+    }
+    for (path, method), expected_statuses in expected_error_responses.items():
+        responses = paths[path][method]["responses"]
+        assert expected_statuses <= responses.keys()
+        for response_status in expected_statuses:
+            schema = responses[response_status]["content"]["application/json"]["schema"]
+            assert schema == {"$ref": "#/components/schemas/ErrorResponse"}

@@ -4,7 +4,15 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
 
 from app.api.dependencies import CurrentUser, RegularUser
-from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
+from app.api.routes.common import (
+    CONFLICT_RESPONSE,
+    FORBIDDEN_RESPONSE,
+    NOT_FOUND_RESPONSE,
+    UNAUTHORIZED_RESPONSE,
+    DbSession,
+    commit_or_conflict,
+    get_or_404,
+)
 from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
 from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
@@ -12,7 +20,7 @@ from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
 
-@router.get("", response_model=list[VehicleResponse])
+@router.get("", response_model=list[VehicleResponse], responses=UNAUTHORIZED_RESPONSE)
 async def list_vehicles(db: DbSession, current_user: CurrentUser) -> list[Vehicle]:
     statement = select(Vehicle)
     if current_user.role != UserRole.ADMIN:
@@ -20,7 +28,12 @@ async def list_vehicles(db: DbSession, current_user: CurrentUser) -> list[Vehicl
     return list(db.scalars(statement.order_by(Vehicle.created_at, Vehicle.id)).all())
 
 
-@router.post("", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=VehicleResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | CONFLICT_RESPONSE,
+)
 async def create_vehicle(
     payload: VehicleCreate, db: DbSession, current_user: RegularUser
 ) -> Vehicle:
@@ -31,14 +44,24 @@ async def create_vehicle(
     return vehicle
 
 
-@router.get("/{vehicle_id}", response_model=VehicleResponse)
+@router.get(
+    "/{vehicle_id}",
+    response_model=VehicleResponse,
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
 async def get_vehicle(vehicle_id: UUID, db: DbSession, current_user: CurrentUser) -> Vehicle:
     vehicle = get_or_404(db, Vehicle, vehicle_id)
     ensure_vehicle_access(vehicle, current_user)
     return vehicle
 
 
-@router.patch("/{vehicle_id}", response_model=VehicleResponse)
+@router.patch(
+    "/{vehicle_id}",
+    response_model=VehicleResponse,
+    responses=(
+        UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE | CONFLICT_RESPONSE
+    ),
+)
 async def update_vehicle(
     payload: VehicleUpdate, vehicle_id: UUID, db: DbSession, current_user: RegularUser
 ) -> Vehicle:
@@ -54,7 +77,13 @@ async def update_vehicle(
     return vehicle
 
 
-@router.delete("/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{vehicle_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=(
+        UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE | CONFLICT_RESPONSE
+    ),
+)
 async def delete_vehicle(vehicle_id: UUID, db: DbSession, current_user: RegularUser) -> Response:
     vehicle = get_or_404(db, Vehicle, vehicle_id)
     ensure_vehicle_access(vehicle, current_user)

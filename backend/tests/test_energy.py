@@ -55,7 +55,10 @@ async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, ob
 
 
 @pytest.mark.anyio
-async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
+async def test_start_and_stop_charging_session(
+    client: AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="app.api.routes.sessions")
     user, vehicle, _, charger = await create_session_dependencies(client)
     start = await client.post(
         "/api/v1/sessions/start",
@@ -71,6 +74,11 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
     assert session["requested_power_kw"] == 11
     assert session["allocated_power_kw"] == 0
     assert session["started_at"] is not None
+    started_record = next(
+        record for record in caplog.records if record.message == "charging_session_started"
+    )
+    assert started_record.charging_session_id == session["id"]
+    assert started_record.user_id == user["id"]
     assert (await client.get(f"/api/v1/chargers/{charger['id']}")).json()["status"] == "CHARGING"
 
     duplicate = await client.post(
@@ -86,6 +94,11 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
     assert stop.status_code == 200
     assert stop.json()["status"] == "COMPLETED"
     assert stop.json()["ended_at"] is not None
+    finished_record = next(
+        record for record in caplog.records if record.message == "charging_session_finished"
+    )
+    assert finished_record.charging_session_id == session["id"]
+    assert finished_record.user_id == user["id"]
     assert (await client.get(f"/api/v1/chargers/{charger['id']}")).json()["status"] == "AVAILABLE"
     assert (await client.post(f"/api/v1/sessions/{session['id']}/stop")).status_code == 409
 

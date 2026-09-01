@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.api.dependencies import CurrentUser
-from app.api.routes.common import DbSession
+from app.api.routes.common import UNAUTHORIZED_RESPONSE, DbSession
 from app.core.security import create_access_token, verify_password
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
@@ -11,7 +11,7 @@ from app.schemas.user import UserResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, responses=UNAUTHORIZED_RESPONSE)
 async def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == payload.email))
     password = payload.password.get_secret_value()
@@ -24,6 +24,6 @@ async def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
     return TokenResponse(access_token=create_access_token(user.id))
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserResponse, responses=UNAUTHORIZED_RESPONSE)
 async def get_me(current_user: CurrentUser) -> User:
     return current_user

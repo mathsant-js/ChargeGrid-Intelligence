@@ -10,6 +10,10 @@ LicensePlate = Annotated[str, StringConstraints(strip_whitespace=True, min_lengt
 PositivePower = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 
+class ErrorResponse(BaseModel):
+    detail: str
+
+
 class ORMResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
