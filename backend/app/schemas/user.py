@@ -9,7 +9,9 @@ Email = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, ma
 Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
 
 
-def _normalize_email(value: str) -> str:
+def _normalize_email(value: str | None) -> str:
+    if value is None:
+        raise ValueError("field cannot be null")
     normalized = value.strip().lower()
     local, separator, domain = normalized.partition("@")
     invalid_domain = "." not in domain or domain.startswith(".") or domain.endswith(".")
@@ -36,6 +38,13 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
 
     _validate_email = field_validator("email")(_normalize_email)
+
+    @field_validator("name", "email", "password", "role", "is_active")
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
 
 
 class UserResponse(ORMResponse):

@@ -69,3 +69,55 @@ async def test_infrastructure_validates_references_enums_and_power(client: Async
     assert (
         await client.post("/api/v1/stations", json={"name": "Invalid", "grid_limit_kw": 0})
     ).status_code == 422
+
+    charger = await client.post(
+        "/api/v1/chargers",
+        json={
+            "station_id": station_id,
+            "name": "Valid charger",
+            "code": "CH-VALID",
+            "max_power_kw": 22,
+        },
+    )
+    missing_reference = await client.patch(
+        f"/api/v1/chargers/{charger.json()['id']}", json={"station_id": str(uuid4())}
+    )
+    assert missing_reference.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_infrastructure_requires_identifiers_and_rejects_null_updates(
+    client: AsyncClient,
+) -> None:
+    blank_station_name = await client.post(
+        "/api/v1/stations", json={"name": "   ", "grid_limit_kw": 60}
+    )
+    station = (
+        await client.post("/api/v1/stations", json={"name": "Station", "grid_limit_kw": 60})
+    ).json()
+    missing_code = await client.post(
+        "/api/v1/chargers",
+        json={"station_id": station["id"], "name": "Charger", "max_power_kw": 22},
+    )
+    charger = (
+        await client.post(
+            "/api/v1/chargers",
+            json={
+                "station_id": station["id"],
+                "name": "Charger",
+                "code": "CH-1",
+                "max_power_kw": 22,
+            },
+        )
+    ).json()
+
+    assert blank_station_name.status_code == 422
+    assert missing_code.status_code == 422
+    assert (
+        await client.patch(f"/api/v1/stations/{station['id']}", json={"is_active": None})
+    ).status_code == 422
+    assert (
+        await client.patch(f"/api/v1/chargers/{charger['id']}", json={"status": None})
+    ).status_code == 422
+    assert (await client.get(f"/api/v1/stations/{uuid4()}")).status_code == 404
+    assert (await client.get(f"/api/v1/chargers/{uuid4()}")).status_code == 404

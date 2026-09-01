@@ -39,7 +39,13 @@ class Charger(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     max_power_kw: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[ChargerStatus] = mapped_column(
-        Enum(ChargerStatus, name="charger_status", native_enum=False),
+        Enum(
+            ChargerStatus,
+            name="charger_status",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
         default=ChargerStatus.AVAILABLE,
         nullable=False,
     )

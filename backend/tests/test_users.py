@@ -61,3 +61,48 @@ async def test_user_rejects_duplicate_email_and_invalid_input(client: AsyncClien
     invalid_password = {**payload, "email": "other@example.com", "password": "short"}
     assert (await client.post("/api/v1/users", json=invalid_password)).status_code == 422
     assert (await client.get(f"/api/v1/users/{uuid4()}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_user_update_rejects_null_and_duplicate_email(client: AsyncClient) -> None:
+    first = (
+        await client.post(
+            "/api/v1/users",
+            json={"name": "First", "email": "first@example.com", "password": "password-123"},
+        )
+    ).json()
+    second = (
+        await client.post(
+            "/api/v1/users",
+            json={"name": "Second", "email": "second@example.com", "password": "password-123"},
+        )
+    ).json()
+
+    duplicate = await client.patch(
+        f"/api/v1/users/{second['id']}", json={"email": " FIRST@EXAMPLE.COM "}
+    )
+    null_name = await client.patch(f"/api/v1/users/{first['id']}", json={"name": None})
+
+    assert duplicate.status_code == 409
+    assert null_name.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_user_response_has_only_public_fields_and_utc_timestamps(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/users",
+        json={"name": "Public", "email": "public@example.com", "password": "password-123"},
+    )
+
+    assert response.status_code == 201
+    assert set(response.json()) == {
+        "id",
+        "name",
+        "email",
+        "role",
+        "is_active",
+        "created_at",
+        "updated_at",
+    }
+    assert response.json()["created_at"].endswith("Z")
+    assert response.json()["updated_at"].endswith("Z")

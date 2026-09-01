@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.models.infrastructure import ChargerStatus
 from app.schemas.common import Name, ORMResponse, PositivePower, ShortCode
@@ -22,6 +22,13 @@ class ChargerUpdate(BaseModel):
     max_power_kw: PositivePower | None = None
     status: ChargerStatus | None = None
     is_active: bool | None = None
+
+    @field_validator("station_id", "name", "code", "max_power_kw", "status", "is_active")
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
 
 
 class ChargerResponse(ORMResponse):

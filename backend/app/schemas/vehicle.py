@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.common import LicensePlate, Name, ORMResponse, PositivePower
 
@@ -21,6 +21,13 @@ class VehicleUpdate(BaseModel):
     model: Name | None = None
     license_plate: LicensePlate | None = None
     max_charge_power_kw: PositivePower | None = None
+
+    @field_validator("name", "brand", "model", "license_plate", "max_charge_power_kw")
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
 
 
 class VehicleResponse(ORMResponse):

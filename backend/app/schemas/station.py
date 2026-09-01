@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, field_validator
 
 from app.schemas.common import Name, ORMResponse, PositivePower
 
@@ -19,6 +19,13 @@ class StationUpdate(BaseModel):
     description: Description | None = None
     grid_limit_kw: PositivePower | None = None
     is_active: bool | None = None
+
+    @field_validator("name", "grid_limit_kw", "is_active")
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
 
 
 class StationResponse(ORMResponse):
