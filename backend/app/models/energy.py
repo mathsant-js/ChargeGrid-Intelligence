@@ -44,7 +44,13 @@ class ChargingSession(TimestampMixin, Base):
         ForeignKey("chargers.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     status: Mapped[ChargingSessionStatus] = mapped_column(
-        Enum(ChargingSessionStatus, name="charging_session_status", native_enum=False),
+        Enum(
+            ChargingSessionStatus,
+            name="charging_session_status",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
         default=ChargingSessionStatus.CREATED,
         nullable=False,
         index=True,

@@ -66,18 +66,16 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Instruções para agentes](AGENTS.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
-- [Fase 2 — Autenticação e autorização](docs/PHASE_2.md)
+- [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
 
 ## Estado atual
 
-A Fase 1 está concluída e seus critérios de saída estão documentados com evidências.
-Além da fundação técnica, o backend já expõe APIs e persistência para usuários,
-veículos, estações, carregadores, sessões, leituras de energia e solar, tarifas,
-invoices, alertas, previsões de demanda e configuração do sistema. O início e o
-encerramento de sessões já aplicam regras de domínio, incluindo disponibilidade,
-potência solicitada, billing e alerta de conclusão.
+As Fases 1 (fundação) e 2 (domínio) estão concluídas, com critérios de saída e
+evidências documentados. O backend entrega Users/Auth, Vehicles, Stations, Chargers
+e Sessions sob `/api/v1`, com JWT, autorização por papel e propriedade, persistência
+via Alembic e regras de início/encerramento de sessão na camada de serviço.
 
-O backend também possui login JWT e autorização mínima por papel e propriedade. A
-Fase 2 ainda não é declarada concluída: esta fatia cobre autenticação e limites de
-acesso, e as próximas fatias devem seguir os critérios documentados em
-[Fase 2 — Autenticação e autorização](docs/PHASE_2.md).
+O próximo incremento funcional é a Fase 3. Relógio/ticks do simulador, gestão e
+alocação energética, dashboards, ESG e treinamento/inferência de ML ainda não estão
+implementados. Estruturas preparatórias de dados de fases futuras existentes no
+backend não devem ser confundidas com esses fluxos completos.

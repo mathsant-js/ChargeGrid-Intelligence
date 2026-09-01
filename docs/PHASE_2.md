@@ -1,46 +1,106 @@
-# Fase 2 — Autenticação e autorização
+# Fase 2 — Domínio
 
-## Fatia implementada
+## Estado
 
-O backend disponibiliza `POST /api/v1/auth/login` com email e senha em JSON e
-`GET /api/v1/auth/me`. O token de acesso é um JWT assinado com HS256, contém o UUID
-do usuário em `sub` e possui expiração configurável.
+**Concluída em 31/08/2026.**
 
-As variáveis `JWT_SECRET_KEY`, `JWT_EXPIRATION_MINUTES` e `JWT_ALGORITHM` configuram
-o token. O valor presente em `.env.example` e no fallback do Docker Compose é apenas
-para desenvolvimento e deve ser substituído em qualquer ambiente compartilhado ou
-de produção.
+A Fase 2 entrega o domínio de usuários, autenticação, veículos, estações,
+carregadores e sessões previsto no `SPEC.md` e no roadmap do `BRIEFING.md`.
+A validação final foi executada com a árvore de trabalho limpa como linha de base e
+repetida após a correção da constraint de estados de sessão.
+
+## Itens entregues
+
+- usuários com UUID, email único normalizado, papéis `ADMIN`/`USER`, ativação,
+  timestamps UTC e senha armazenada somente como hash scrypt;
+- login JWT HS256 com expiração, `sub` igual ao UUID do usuário e endpoint
+  autenticado `GET /api/v1/auth/me`;
+- autorização backend por papel e propriedade, com proteção contra IDOR e respostas
+  `401`, `403`, `404`, `409` e `422` conforme o caso;
+- CRUD especificado de veículos, com vínculo ao usuário autenticado e potência
+  máxima positiva;
+- CRUD especificado de estações e carregadores, restrito ao administrador para
+  escrita, com potências positivas e estados válidos;
+- listagem e consulta de sessões, início e encerramento pelo motorista proprietário;
+- regras de início centralizadas no serviço de domínio: usuário ativo, veículo do
+  usuário, carregador ativo e disponível, ausência de sessão ativa concorrente no
+  carregador e no veículo;
+- cálculo de `requested_power_kw` como o menor valor entre os limites do carregador
+  e do veículo;
+- transições válidas de sessão e bloqueio de retorno de estados terminais;
+- encerramento em `COMPLETED`, `ended_at` UTC, potência alocada zerada e carregador
+  novamente `AVAILABLE`;
+- schemas públicos sem `password_hash` e operações públicas sob `/api/v1`.
 
 ## Política de acesso
 
 - `ADMIN` lista, cria e altera usuários e cria ou altera estações e carregadores;
 - `ADMIN` consulta globalmente usuários, veículos e sessões, mas não executa as
   operações de motorista sobre veículos e sessões;
-- `USER` consulta e altera seu próprio usuário, mas não pode alterar `role`.
+- `USER` consulta e altera seu próprio usuário, mas não pode alterar `role`;
 - `USER` cria, consulta, altera e exclui somente os próprios veículos;
-- `USER` consulta estações e carregadores necessários ao início da recarga, sem
-  permissão para alterá-los;
+- `USER` consulta estações e carregadores necessários ao início da recarga;
 - `USER` inicia, consulta e encerra somente as próprias sessões;
-- veículos e sessões de um `USER` são filtrados pelo usuário autenticado;
-- recursos pertencentes a outro usuário respondem `404`, evitando confirmar sua
-  existência;
-- uma operação administrativa feita por `USER` responde `403`;
-- credenciais inválidas e contas inativas respondem igualmente `401`, sem revelar
-  se a conta existe ou está desativada;
-- operações autenticadas derivam `user_id` do JWT; em particular, a criação de
-  veículo e o início de sessão não confiam em proprietário enviado pelo cliente.
+- recursos de outro usuário respondem `404`, sem confirmar sua existência;
+- credenciais inválidas e contas inativas respondem igualmente `401`;
+- `user_id` de veículos e sessões é derivado do JWT, não do corpo da requisição.
 
-Tokens ausentes, inválidos ou expirados respondem `401` com o desafio Bearer. Nenhuma
-resposta pública inclui `password_hash`.
+Tokens ausentes, inválidos ou expirados respondem `401` com desafio Bearer. O login
+e o health check são os únicos endpoints da Fase 2 sem segurança Bearer declarada
+no OpenAPI.
 
-## OpenAPI
+## Migrations
 
-Todos os endpoints desta fase, exceto `POST /api/v1/auth/login`, declaram o esquema
-`HTTPBearer` no OpenAPI. O endpoint de health também permanece público.
+A cadeia Alembic possui uma única head:
 
-## Estado da fase
+- `20260818_0001`: baseline da Fase 1;
+- `20260818_0002`: users, vehicles, charging stations e chargers;
+- `20260818_0003`: charging sessions (além de tabelas preparatórias já existentes);
+- `20260831_0006`: constraints de `UserRole` e `ChargerStatus`;
+- `20260831_0007`: constraint de `ChargingSessionStatus`.
 
-A política de autenticação e autorização da Fase 2 está implementada. Os testes
-automatizados cobrem autenticação, expiração e desativação, papéis, propriedade,
-tentativas de IDOR, respostas `401`/`403`/`404` e o vínculo das operações ao usuário
-autenticado.
+As revisions intermediárias `0004` e `0005` já existiam na cadeia antes desta
+validação e não foram ampliadas. `alembic heads` retornou somente
+`20260831_0007 (head)` e a geração SQL offline do upgrade completo para PostgreSQL
+foi concluída. A aplicação contra um PostgreSQL ativo não foi repetida porque
+`docker compose ps` confirmou que nenhum serviço do projeto estava em execução.
+
+## Checklist objetiva de saída
+
+- [x] **Users/Auth:** CRUD previsto, hash de senha, email único, JWT, conta inativa,
+  papéis e não exposição do hash — cobertos por `test_users.py` e
+  `test_auth_authorization.py`.
+- [x] **Vehicles:** CRUD, propriedade, IDOR, owner derivado do token, validação e
+  referências — cobertos por `test_vehicles.py` e `test_auth_authorization.py`.
+- [x] **Stations/Chargers:** CRUD, autorização administrativa, referências,
+  potências e enums — cobertos por `test_infrastructure.py`.
+- [x] **Sessions:** início, término, propriedade, concorrência, disponibilidade,
+  potência solicitada e estados terminais — cobertos por
+  `test_charging_session_domain.py`.
+- [x] **Persistência:** UUIDs, timestamps, FKs, checks positivos e constraints dos
+  enums da Fase 2 — 43 testes backend passaram; migration `0007` possui teste de
+  regressão da metadata.
+- [x] **API/OpenAPI:** 27 paths gerados em OpenAPI 3.1.0; todos os endpoints exigidos
+  de Auth, Users, Vehicles, Stations, Chargers e Sessions estão presentes e têm a
+  segurança esperada — coberto por `test_openapi.py` e inspeção do schema gerado.
+- [x] **Qualidade backend:** Ruff e mypy strict passaram; pytest passou com 43 testes
+  e 97% de cobertura total.
+- [x] **Frontend preservado:** ESLint, TypeScript, 2 testes Vitest e build Vite de
+  produção passaram.
+- [x] **Segurança do repositório:** nenhum `.env`, chave privada, token ou segredo
+  foi adicionado; apenas `.env.example` permanece versionado.
+- [x] **Higiene:** nenhuma ocorrência real de TODO/FIXME ou stub; regras de ciclo de
+  vida, concorrência e potência de sessão estão em
+  `app/services/charging_sessions.py`, enquanto checks de autorização permanecem
+  nas dependências/rotas. Classes Pydantic e SQLAlchemy vazias são heranças
+  declarativas intencionais, não stubs.
+
+## Limites desta fase
+
+Não fazem parte da conclusão da Fase 2: relógio/ticks do simulador, cálculo ou
+alocação energética, prioridade/rateio solar, dashboards, indicadores ESG,
+treinamento ou inferência de ML. Os pacotes `simulation`, `analytics` e `ml`
+continuam sem implementação dessas regras. Estruturas persistentes e endpoints
+preparatórios de energia, solar, billing, alertas e previsões que já existiam não
+constituem a implementação dos fluxos das fases posteriores e não foram ampliados
+nesta validação.

@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -352,3 +352,17 @@ def test_terminal_session_cannot_transition_back_to_charging(db_session: Session
 
     with pytest.raises(DomainConflictError, match="cannot transition"):
         transition_session(session, ChargingSessionStatus.CHARGING)
+
+
+def test_database_constrains_session_status_to_domain_values(db_session: Session) -> None:
+    constraints = inspect(db_session.get_bind()).get_check_constraints("charging_sessions")
+
+    status_constraint = next(
+        constraint
+        for constraint in constraints
+        if constraint["name"] == "charging_session_status"
+    )
+    sql_text = status_constraint["sqltext"]
+    assert sql_text is not None
+    for status in ChargingSessionStatus:
+        assert f"'{status.value}'" in sql_text
