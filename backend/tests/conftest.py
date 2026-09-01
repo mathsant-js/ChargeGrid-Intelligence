@@ -1,4 +1,6 @@
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,6 +13,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app as api_app
+from app.models.billing import Tariff
 from app.models.user import User, UserRole
 
 ADMIN_EMAIL = "admin@example.com"
@@ -63,6 +66,15 @@ async def client(test_engine: Engine) -> AsyncIterator[AsyncClient]:
                 password_hash=hash_password(ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
                 is_active=True,
+            )
+        )
+        session.add(
+            Tariff(
+                name="Standard",
+                price_per_kwh=Decimal("0.9200"),
+                currency="BRL",
+                is_active=True,
+                valid_from=datetime(2020, 1, 1, tzinfo=UTC),
             )
         )
         session.commit()

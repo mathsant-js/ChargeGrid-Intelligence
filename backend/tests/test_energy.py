@@ -62,7 +62,6 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.9200",
         },
     )
 
@@ -79,7 +78,6 @@ async def test_start_and_stop_charging_session(client: AsyncClient) -> None:
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.92",
         },
     )
     assert duplicate.status_code == 409
@@ -100,7 +98,6 @@ async def test_session_rejects_vehicle_from_another_user(client: AsyncClient) ->
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.92",
         },
     )
     assert first.status_code == 201
@@ -109,7 +106,6 @@ async def test_session_rejects_vehicle_from_another_user(client: AsyncClient) ->
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.92",
         },
     )
     assert response.status_code == 409
@@ -125,7 +121,6 @@ async def test_energy_and_solar_current_history_filters(
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.92",
         },
     )
     session = db_session.get(ChargingSession, UUID(session_response.json()["id"]))

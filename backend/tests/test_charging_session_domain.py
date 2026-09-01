@@ -1,12 +1,14 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
+from app.models.billing import Invoice, Tariff
 from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.user import User
@@ -87,7 +89,6 @@ async def start_session(
         json={
             "vehicle_id": vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.9200",
         },
     )
 
@@ -103,6 +104,93 @@ async def test_valid_start_and_power_limited_by_vehicle(client: AsyncClient) -> 
     assert response.status_code == 201
     assert response.json()["status"] == "CHARGING"
     assert response.json()["requested_power_kw"] == 11
+    assert response.json()["tariff_per_kwh"] == "0.9200"
+
+
+@pytest.mark.anyio
+async def test_user_cannot_supply_session_tariff(client: AsyncClient) -> None:
+    _, headers = await create_user_and_headers(client, suffix="supplied-tariff")
+    vehicle = await create_vehicle(client, headers, suffix="supplied-tariff")
+    charger = await create_charger(client, suffix="supplied-tariff")
+
+    response = await client.post(
+        "/api/v1/sessions/start",
+        headers=headers,
+        json={
+            "vehicle_id": vehicle["id"],
+            "charger_id": charger["id"],
+            "tariff_per_kwh": "0.01",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "selected by the backend" in response.text
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("tariff_state", ["missing", "inactive", "future", "expired"])
+async def test_start_rejects_when_no_active_tariff_is_currently_valid(
+    client: AsyncClient, db_session: Session, tariff_state: str
+) -> None:
+    _, headers = await create_user_and_headers(client, suffix=f"tariff-{tariff_state}")
+    vehicle = await create_vehicle(client, headers, suffix=f"tariff-{tariff_state}")
+    charger = await create_charger(client, suffix=f"tariff-{tariff_state}")
+    tariff = db_session.scalar(select(Tariff))
+    assert tariff is not None
+    now = datetime.now(UTC)
+    if tariff_state == "missing":
+        db_session.execute(delete(Tariff))
+    elif tariff_state == "inactive":
+        tariff.is_active = False
+    elif tariff_state == "future":
+        tariff.valid_from = now + timedelta(days=1)
+    else:
+        tariff.valid_until = now - timedelta(days=1)
+    db_session.commit()
+
+    response = await start_session(client, headers, vehicle, charger)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "No active tariff is valid for the session start time"
+
+
+@pytest.mark.anyio
+async def test_session_keeps_original_price_after_active_tariff_changes(
+    client: AsyncClient, db_session: Session
+) -> None:
+    _, headers = await create_user_and_headers(client, suffix="tariff-history")
+    vehicle = await create_vehicle(client, headers, suffix="tariff-history")
+    charger = await create_charger(client, suffix="tariff-history")
+    started = await start_session(client, headers, vehicle, charger)
+    assert started.status_code == 201
+    session_id = UUID(started.json()["id"])
+
+    original_tariff = db_session.scalar(select(Tariff).where(Tariff.is_active.is_(True)))
+    assert original_tariff is not None
+    original_tariff.is_active = False
+    db_session.add(
+        Tariff(
+            name="New standard",
+            price_per_kwh=Decimal("1.5000"),
+            currency="BRL",
+            is_active=True,
+            valid_from=datetime.now(UTC) - timedelta(minutes=1),
+        )
+    )
+    session = db_session.get(ChargingSession, session_id)
+    assert session is not None
+    session.energy_consumed_kwh = 10
+    db_session.commit()
+
+    stopped = await client.post(f"/api/v1/sessions/{session_id}/stop", headers=headers)
+
+    assert stopped.status_code == 200
+    assert stopped.json()["tariff_per_kwh"] == "0.9200"
+    assert stopped.json()["total_cost"] == "9.20"
+    invoice = db_session.scalar(select(Invoice).where(Invoice.session_id == session_id))
+    assert invoice is not None
+    assert invoice.tariff_per_kwh == Decimal("0.9200")
+    assert invoice.total == Decimal("9.20")
 
 
 def test_inactive_user_cannot_start_session(db_session: Session) -> None:
@@ -135,7 +223,6 @@ def test_inactive_user_cannot_start_session(db_session: Session) -> None:
             user=user,
             vehicle=vehicle,
             charger=charger,
-            tariff_per_kwh=Decimal("0.92"),
         )
 
 

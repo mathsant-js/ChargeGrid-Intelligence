@@ -3,19 +3,22 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.energy import ChargingSessionStatus
 from app.schemas.common import ORMResponse
 
 NonNegativePower = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-NonNegativeMoney = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=4)]
-
-
 class ChargingSessionStart(BaseModel):
     vehicle_id: UUID
     charger_id: UUID
-    tariff_per_kwh: NonNegativeMoney
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_user_supplied_tariff(cls, value: object) -> object:
+        if isinstance(value, dict) and "tariff_per_kwh" in value:
+            raise ValueError("tariff_per_kwh is selected by the backend")
+        return value
 
 
 class ChargingSessionResponse(ORMResponse):

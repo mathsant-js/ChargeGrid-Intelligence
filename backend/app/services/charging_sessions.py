@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alert, AlertSeverity, AlertType
-from app.models.billing import Invoice, InvoiceStatus
+from app.models.billing import Invoice, InvoiceStatus, Tariff
 from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargerStatus
 from app.models.user import User
@@ -59,7 +59,6 @@ def start_charging_session(
     user: User,
     vehicle: Vehicle,
     charger: Charger,
-    tariff_per_kwh: Decimal,
 ) -> ChargingSession:
     if not user.is_active:
         raise DomainConflictError("User is inactive")
@@ -87,19 +86,31 @@ def start_charging_session(
     if vehicle_session is not None:
         raise DomainConflictError("Vehicle already has an active session")
 
+    started_at = datetime.now(UTC)
+    tariff = db.scalar(
+        select(Tariff)
+        .where(
+            Tariff.is_active.is_(True),
+            Tariff.valid_from <= started_at,
+            or_(Tariff.valid_until.is_(None), Tariff.valid_until > started_at),
+        )
+    )
+    if tariff is None:
+        raise DomainConflictError("No active tariff is valid for the session start time")
+
     requested_power_kw = min(charger.max_power_kw, vehicle.max_charge_power_kw)
     session = ChargingSession(
         user_id=user.id,
         vehicle_id=vehicle.id,
         charger_id=charger.id,
         status=ChargingSessionStatus.CHARGING,
-        started_at=datetime.now(UTC),
+        started_at=started_at,
         requested_power_kw=requested_power_kw,
         allocated_power_kw=0,
         energy_consumed_kwh=0,
         solar_energy_kwh=0,
         grid_energy_kwh=0,
-        tariff_per_kwh=tariff_per_kwh,
+        tariff_per_kwh=tariff.price_per_kwh,
         total_cost=Decimal("0"),
     )
     charger.status = ChargerStatus.CHARGING

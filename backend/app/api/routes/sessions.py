@@ -51,7 +51,6 @@ async def start_session(
         user=current_user,
         vehicle=vehicle,
         charger=get_or_404(db, Charger, payload.charger_id),
-        tariff_per_kwh=payload.tariff_per_kwh,
     )
     commit_or_conflict(db, "Charging session could not be started")
     db.refresh(session)

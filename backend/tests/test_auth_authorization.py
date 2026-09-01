@@ -281,7 +281,6 @@ async def test_vehicle_and_session_ownership_and_admin_global_access(
             "user_id": str(second.id),
             "vehicle_id": own_vehicle["id"],
             "charger_id": charger["id"],
-            "tariff_per_kwh": "0.92",
         },
     )
     assert started.status_code == 201
@@ -354,7 +353,6 @@ async def test_vehicle_and_session_ownership_and_admin_global_access(
             json={
                 "vehicle_id": own_vehicle["id"],
                 "charger_id": charger["id"],
-                "tariff_per_kwh": "0.92",
             },
         )
     ).status_code == 403
