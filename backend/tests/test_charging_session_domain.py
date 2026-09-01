@@ -14,7 +14,7 @@ from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.user import User
 from app.models.vehicle import Vehicle
-from app.services.charging_sessions import start_charging_session
+from app.services.charging_sessions import start_charging_session, transition_session
 from app.services.errors import DomainConflictError
 
 
@@ -106,6 +106,8 @@ async def test_valid_start_and_power_limited_by_vehicle(client: AsyncClient) -> 
     assert response.json()["status"] == "CHARGING"
     assert response.json()["requested_power_kw"] == 11
     assert response.json()["tariff_per_kwh"] == "0.9200"
+    charger_response = await client.get(f"/api/v1/chargers/{charger['id']}")
+    assert charger_response.json()["status"] == "CHARGING"
 
 
 @pytest.mark.anyio
@@ -258,6 +260,24 @@ async def test_unavailable_charger_rejects_start(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_inactive_charger_rejects_start(client: AsyncClient) -> None:
+    _, headers = await create_user_and_headers(client, suffix="inactive-charger")
+    vehicle = await create_vehicle(client, headers, suffix="inactive-charger")
+    charger = await create_charger(client, suffix="inactive-charger")
+    update = await client.patch(
+        f"/api/v1/chargers/{charger['id']}",
+        json={"is_active": False},
+    )
+    assert update.status_code == 200
+    assert update.json()["is_active"] is False
+
+    response = await start_session(client, headers, vehicle, charger)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Charger is unavailable"
+
+
+@pytest.mark.anyio
 async def test_vehicle_with_active_session_rejects_second_start(client: AsyncClient) -> None:
     _, headers = await create_user_and_headers(client, suffix="vehicle-active")
     vehicle = await create_vehicle(client, headers, suffix="vehicle-active")
@@ -347,9 +367,43 @@ async def test_other_user_cannot_access_or_stop_session(client: AsyncClient) -> 
     assert get_response.json() == stop_response.json() == {"detail": "Resource not found"}
 
 
-def test_terminal_session_cannot_transition_back_to_charging(db_session: Session) -> None:
-    session = ChargingSession(status=ChargingSessionStatus.COMPLETED)
-    from app.services.charging_sessions import transition_session
+VALID_TRANSITION_PAIRS = {
+    (ChargingSessionStatus.CREATED, ChargingSessionStatus.CHARGING),
+    (ChargingSessionStatus.CREATED, ChargingSessionStatus.CANCELLED),
+    (ChargingSessionStatus.CHARGING, ChargingSessionStatus.PAUSED),
+    (ChargingSessionStatus.CHARGING, ChargingSessionStatus.COMPLETED),
+    (ChargingSessionStatus.CHARGING, ChargingSessionStatus.CANCELLED),
+    (ChargingSessionStatus.PAUSED, ChargingSessionStatus.CHARGING),
+    (ChargingSessionStatus.PAUSED, ChargingSessionStatus.COMPLETED),
+    (ChargingSessionStatus.PAUSED, ChargingSessionStatus.CANCELLED),
+}
+
+
+@pytest.mark.parametrize("source_status", list(ChargingSessionStatus))
+@pytest.mark.parametrize("target_status", list(ChargingSessionStatus))
+def test_complete_session_transition_matrix(
+    source_status: ChargingSessionStatus,
+    target_status: ChargingSessionStatus,
+) -> None:
+    session = ChargingSession(status=source_status)
+
+    if (source_status, target_status) in VALID_TRANSITION_PAIRS:
+        transition_session(session, target_status)
+        assert session.status == target_status
+    else:
+        with pytest.raises(DomainConflictError, match="cannot transition"):
+            transition_session(session, target_status)
+        assert session.status == source_status
+
+
+@pytest.mark.parametrize(
+    "terminal_status",
+    [ChargingSessionStatus.COMPLETED, ChargingSessionStatus.CANCELLED],
+)
+def test_terminal_session_cannot_transition_back_to_charging(
+    terminal_status: ChargingSessionStatus,
+) -> None:
+    session = ChargingSession(status=terminal_status)
 
     with pytest.raises(DomainConflictError, match="cannot transition"):
         transition_session(session, ChargingSessionStatus.CHARGING)
