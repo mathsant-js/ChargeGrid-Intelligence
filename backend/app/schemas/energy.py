@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.energy import ChargingSessionStatus
 from app.schemas.common import ORMResponse
@@ -32,6 +32,13 @@ class ChargingSessionResponse(ORMResponse):
     grid_energy_kwh: float
     tariff_per_kwh: Decimal
     total_cost: Decimal
+
+    @field_validator("started_at", "ended_at")
+    @classmethod
+    def normalize_utc(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC) if value is not None else None
 
 
 class ReadingResponse(BaseModel):

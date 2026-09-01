@@ -1,8 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alert, AlertSeverity, AlertType
@@ -11,12 +10,47 @@ from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargerStatus
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.services.errors import DomainConflictError, DomainResourceNotFoundError
 
 ACTIVE_SESSION_STATUSES = (
     ChargingSessionStatus.CREATED,
     ChargingSessionStatus.CHARGING,
     ChargingSessionStatus.PAUSED,
 )
+
+VALID_SESSION_TRANSITIONS = {
+    ChargingSessionStatus.CREATED: {
+        ChargingSessionStatus.CHARGING,
+        ChargingSessionStatus.CANCELLED,
+    },
+    ChargingSessionStatus.CHARGING: {
+        ChargingSessionStatus.PAUSED,
+        ChargingSessionStatus.COMPLETED,
+        ChargingSessionStatus.CANCELLED,
+    },
+    ChargingSessionStatus.PAUSED: {
+        ChargingSessionStatus.CHARGING,
+        ChargingSessionStatus.COMPLETED,
+        ChargingSessionStatus.CANCELLED,
+    },
+    ChargingSessionStatus.COMPLETED: set(),
+    ChargingSessionStatus.CANCELLED: set(),
+}
+
+
+def ensure_session_access(session: ChargingSession, user: User) -> None:
+    if session.user_id != user.id:
+        raise DomainResourceNotFoundError("Resource not found")
+
+
+def transition_session(
+    session: ChargingSession, target_status: ChargingSessionStatus
+) -> None:
+    if target_status not in VALID_SESSION_TRANSITIONS[session.status]:
+        raise DomainConflictError(
+            f"Session cannot transition from {session.status} to {target_status}"
+        )
+    session.status = target_status
 
 
 def start_charging_session(
@@ -28,25 +62,30 @@ def start_charging_session(
     tariff_per_kwh: Decimal,
 ) -> ChargingSession:
     if not user.is_active:
-        raise HTTPException(status.HTTP_409_CONFLICT, "User is inactive")
+        raise DomainConflictError("User is inactive")
     if vehicle.user_id != user.id:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Vehicle does not belong to user")
-    if not charger.is_active or charger.status != ChargerStatus.AVAILABLE:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Charger is unavailable")
+        raise DomainConflictError("Vehicle does not belong to user")
+    if not charger.is_active:
+        raise DomainConflictError("Charger is unavailable")
 
-    existing = db.scalar(
+    charger_session = db.scalar(
         select(ChargingSession.id).where(
             ChargingSession.status.in_(ACTIVE_SESSION_STATUSES),
-            or_(
-                ChargingSession.charger_id == charger.id,
-                ChargingSession.vehicle_id == vehicle.id,
-            ),
+            ChargingSession.charger_id == charger.id,
         )
     )
-    if existing is not None:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "Charger or vehicle already has an active session"
+    if charger_session is not None:
+        raise DomainConflictError("Charger already has an active session")
+    if charger.status != ChargerStatus.AVAILABLE:
+        raise DomainConflictError("Charger is unavailable")
+    vehicle_session = db.scalar(
+        select(ChargingSession.id).where(
+            ChargingSession.status.in_(ACTIVE_SESSION_STATUSES),
+            ChargingSession.vehicle_id == vehicle.id,
         )
+    )
+    if vehicle_session is not None:
+        raise DomainConflictError("Vehicle already has an active session")
 
     requested_power_kw = min(charger.max_power_kw, vehicle.max_charge_power_kw)
     session = ChargingSession(
@@ -69,9 +108,7 @@ def start_charging_session(
 
 
 def stop_charging_session(db: Session, session: ChargingSession, charger: Charger) -> None:
-    if session.status not in (ChargingSessionStatus.CHARGING, ChargingSessionStatus.PAUSED):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Session cannot be stopped")
-    session.status = ChargingSessionStatus.COMPLETED
+    transition_session(session, ChargingSessionStatus.COMPLETED)
     closed_at = datetime.now(UTC)
     session.ended_at = closed_at
     session.allocated_power_kw = 0

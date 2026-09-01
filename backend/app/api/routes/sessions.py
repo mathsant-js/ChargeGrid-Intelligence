@@ -7,10 +7,14 @@ from app.api.dependencies import CurrentUser
 from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
 from app.models.energy import ChargingSession
 from app.models.infrastructure import Charger
-from app.models.user import User, UserRole
+from app.models.user import UserRole
 from app.models.vehicle import Vehicle
 from app.schemas.energy import ChargingSessionResponse, ChargingSessionStart
-from app.services.charging_sessions import start_charging_session, stop_charging_session
+from app.services.charging_sessions import (
+    ensure_session_access,
+    start_charging_session,
+    stop_charging_session,
+)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -30,7 +34,8 @@ async def get_session(
     session_id: UUID, db: DbSession, current_user: CurrentUser
 ) -> ChargingSession:
     session = get_or_404(db, ChargingSession, session_id)
-    ensure_session_access(session, current_user)
+    if current_user.role != UserRole.ADMIN:
+        ensure_session_access(session, current_user)
     return session
 
 
@@ -58,14 +63,10 @@ async def stop_session(
     session_id: UUID, db: DbSession, current_user: CurrentUser
 ) -> ChargingSession:
     session = get_or_404(db, ChargingSession, session_id)
-    ensure_session_access(session, current_user)
+    if current_user.role != UserRole.ADMIN:
+        ensure_session_access(session, current_user)
     charger = get_or_404(db, Charger, session.charger_id)
     stop_charging_session(db, session, charger)
     commit_or_conflict(db, "Charging session could not be stopped")
     db.refresh(session)
     return session
-
-
-def ensure_session_access(session: ChargingSession, current_user: User) -> None:
-    if current_user.role != UserRole.ADMIN and session.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
