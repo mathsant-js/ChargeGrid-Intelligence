@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import delete, inspect, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -366,3 +367,61 @@ def test_database_constrains_session_status_to_domain_values(db_session: Session
     assert sql_text is not None
     for status in ChargingSessionStatus:
         assert f"'{status.value}'" in sql_text
+
+
+@pytest.mark.parametrize("conflict_field", ["charger", "vehicle"])
+def test_database_rejects_conflicting_active_sessions(
+    db_session: Session, conflict_field: str
+) -> None:
+    user = User(
+        name="Concurrent driver",
+        email=f"concurrent-{conflict_field}@example.com",
+        password_hash=hash_password("secret123"),
+    )
+    station = ChargingStation(name="Concurrent station", grid_limit_kw=60)
+    db_session.add_all([user, station])
+    db_session.flush()
+    vehicles = [
+        Vehicle(
+            user_id=user.id,
+            name=f"EV {number}",
+            brand="GoodCar",
+            model="E1",
+            license_plate=f"RACE-{conflict_field}-{number}",
+            max_charge_power_kw=11,
+        )
+        for number in range(2)
+    ]
+    chargers = [
+        Charger(
+            station_id=station.id,
+            name=f"Charger {number}",
+            code=f"RACE-{conflict_field}-{number}",
+            max_power_kw=22,
+        )
+        for number in range(2)
+    ]
+    db_session.add_all([*vehicles, *chargers])
+    db_session.flush()
+
+    shared_vehicle = vehicles[0] if conflict_field == "vehicle" else None
+    shared_charger = chargers[0] if conflict_field == "charger" else None
+    for number in range(2):
+        db_session.add(
+            ChargingSession(
+                user_id=user.id,
+                vehicle_id=(shared_vehicle or vehicles[number]).id,
+                charger_id=(shared_charger or chargers[number]).id,
+                status=ChargingSessionStatus.CHARGING,
+                requested_power_kw=11,
+                allocated_power_kw=0,
+                energy_consumed_kwh=0,
+                solar_energy_kwh=0,
+                grid_energy_kwh=0,
+                tariff_per_kwh=Decimal("0.9200"),
+                total_cost=Decimal("0"),
+            )
+        )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()

@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Numeric
+from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -31,6 +31,20 @@ class ChargingSession(TimestampMixin, Base):
         CheckConstraint("grid_energy_kwh >= 0", name="ck_sessions_grid_energy_nonnegative"),
         CheckConstraint("tariff_per_kwh >= 0", name="ck_sessions_tariff_nonnegative"),
         CheckConstraint("total_cost >= 0", name="ck_sessions_total_cost_nonnegative"),
+        Index(
+            "uq_charging_sessions_active_charger",
+            "charger_id",
+            unique=True,
+            postgresql_where=text("status IN ('CREATED', 'CHARGING', 'PAUSED')"),
+            sqlite_where=text("status IN ('CREATED', 'CHARGING', 'PAUSED')"),
+        ),
+        Index(
+            "uq_charging_sessions_active_vehicle",
+            "vehicle_id",
+            unique=True,
+            postgresql_where=text("status IN ('CREATED', 'CHARGING', 'PAUSED')"),
+            sqlite_where=text("status IN ('CREATED', 'CHARGING', 'PAUSED')"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
