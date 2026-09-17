@@ -13,6 +13,7 @@ async def test_station_and_charger_crud(client: AsyncClient) -> None:
     assert station_response.status_code == 201
     station = station_response.json()
     assert station["is_active"] is True
+    assert station["station_peak_solar_kw"] == 0.0
 
     charger_response = await client.post(
         "/api/v1/chargers",
@@ -29,7 +30,7 @@ async def test_station_and_charger_crud(client: AsyncClient) -> None:
 
     station_update = await client.patch(
         f"/api/v1/stations/{station['id']}",
-        json={"grid_limit_kw": 55, "description": None},
+        json={"grid_limit_kw": 55, "description": None, "station_peak_solar_kw": 18.5},
     )
     charger_update = await client.patch(
         f"/api/v1/chargers/{charger['id']}",
@@ -38,13 +39,15 @@ async def test_station_and_charger_crud(client: AsyncClient) -> None:
     assert station_update.status_code == 200
     assert station_update.json()["description"] is None
     assert station_update.json()["grid_limit_kw"] == 55
+    assert station_update.json()["station_peak_solar_kw"] == 18.5
     assert charger_update.status_code == 200
     assert charger_update.json()["status"] == "UNAVAILABLE"
     assert charger_update.json()["is_active"] is False
 
     assert (await client.get("/api/v1/stations")).json() == [station_update.json()]
     assert (await client.get("/api/v1/chargers")).json() == [charger_update.json()]
-    assert (await client.get(f"/api/v1/stations/{station['id']}")).status_code == 200
+    persisted_station = (await client.get(f"/api/v1/stations/{station['id']}")).json()
+    assert persisted_station["station_peak_solar_kw"] == 18.5
     assert (await client.get(f"/api/v1/chargers/{charger['id']}")).status_code == 200
 
 
@@ -68,6 +71,17 @@ async def test_infrastructure_validates_references_enums_and_power(client: Async
     assert (await client.post("/api/v1/chargers", json=invalid_power)).status_code == 422
     assert (
         await client.post("/api/v1/stations", json={"name": "Invalid", "grid_limit_kw": 0})
+    ).status_code == 422
+    for peak in (-1, "NaN", "Infinity"):
+        invalid_solar = await client.post(
+            "/api/v1/stations",
+            json={"name": "Invalid solar", "grid_limit_kw": 60, "station_peak_solar_kw": peak},
+        )
+        assert invalid_solar.status_code == 422
+    assert (
+        await client.patch(
+            f"/api/v1/stations/{station_id}", json={"station_peak_solar_kw": None}
+        )
     ).status_code == 422
 
     charger = await client.post(
