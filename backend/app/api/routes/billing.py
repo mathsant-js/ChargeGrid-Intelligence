@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select, update
 
+from app.api.dependencies import AdminUser
 from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
 from app.models.billing import Invoice, InvoiceStatus, Tariff
 from app.schemas.billing import InvoiceResponse, TariffCreate, TariffResponse, TariffUpdate
@@ -29,12 +30,12 @@ async def list_tariffs(db: DbSession) -> list[Tariff]:
 
 
 @router.post("/tariffs", response_model=TariffResponse, status_code=status.HTTP_201_CREATED)
-async def create_tariff(payload: TariffCreate, db: DbSession) -> Tariff:
+async def create_tariff(payload: TariffCreate, db: DbSession, _admin: AdminUser) -> Tariff:
     tariff = Tariff(**payload.model_dump())
     if tariff.is_active:
         deactivate_other_tariffs(db)
     db.add(tariff)
-    commit_or_conflict(db)
+    commit_or_conflict(db, {"uq_tariffs_one_active": "Only one tariff can be active"})
     db.refresh(tariff)
     return tariff
 
@@ -45,7 +46,9 @@ async def get_tariff(tariff_id: UUID, db: DbSession) -> Tariff:
 
 
 @router.patch("/tariffs/{tariff_id}", response_model=TariffResponse)
-async def update_tariff(payload: TariffUpdate, tariff_id: UUID, db: DbSession) -> Tariff:
+async def update_tariff(
+    payload: TariffUpdate, tariff_id: UUID, db: DbSession, _admin: AdminUser
+) -> Tariff:
     tariff = get_or_404(db, Tariff, tariff_id)
     changes = payload.model_dump(exclude_unset=True)
     valid_from = changes.get("valid_from", tariff.valid_from)
@@ -56,7 +59,7 @@ async def update_tariff(payload: TariffUpdate, tariff_id: UUID, db: DbSession) -
         deactivate_other_tariffs(db, tariff.id)
     for field, value in changes.items():
         setattr(tariff, field, value)
-    commit_or_conflict(db)
+    commit_or_conflict(db, {"uq_tariffs_one_active": "Only one tariff can be active"})
     db.refresh(tariff)
     return tariff
 

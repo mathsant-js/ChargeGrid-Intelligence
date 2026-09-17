@@ -94,6 +94,7 @@ def start_charging_session(
             Tariff.valid_from <= started_at,
             or_(Tariff.valid_until.is_(None), Tariff.valid_until > started_at),
         )
+        .order_by(Tariff.valid_from.desc(), Tariff.created_at.desc(), Tariff.id.desc())
     )
     if tariff is None:
         raise DomainConflictError("No active tariff is valid for the session start time")
