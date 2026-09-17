@@ -75,7 +75,16 @@ evidências documentados. O backend entrega Users/Auth, Vehicles, Stations, Char
 e Sessions sob `/api/v1`, com JWT, autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
 
-O próximo incremento funcional é a Fase 3. Relógio/ticks do simulador, gestão e
-alocação energética, dashboards, ESG e treinamento/inferência de ML ainda não estão
-implementados. Estruturas preparatórias de dados de fases futuras existentes no
-backend não devem ser confundidas com esses fluxos completos.
+A Fase 3 já contém relógio determinístico, provedor solar e o serviço
+`app.simulation.tick.execute_tick`. O serviço recebe uma resolução de potência
+injetável por estação, valida os limites físicos e persiste as leituras e os
+acumuladores em uma transação. Não há loop automático nem rota pública para
+acioná-lo. A implementação de alocação e rateio pertence à Fase 4.
+
+Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
+cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
+mesmo instante ignora estações já concluídas. Constraints no banco impedem
+duplicatas mesmo em escrita concorrente, e uma falha desfaz todo o tick. O
+relógio avança apenas depois do commit. O chamador deve passar uma sessão de
+banco sem transação ativa e um relógio iniciado; em caso de erro pode repetir
+o mesmo tick após corrigir a causa.
