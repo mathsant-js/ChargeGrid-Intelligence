@@ -41,6 +41,10 @@ class ChargingSession(TimestampMixin, Base):
         CheckConstraint("grid_energy_kwh >= 0", name="ck_sessions_grid_energy_nonnegative"),
         CheckConstraint("tariff_per_kwh >= 0", name="ck_sessions_tariff_nonnegative"),
         CheckConstraint("total_cost >= 0", name="ck_sessions_total_cost_nonnegative"),
+        CheckConstraint(
+            "status IN ('CREATED', 'CHARGING', 'PAUSED', 'COMPLETED', 'CANCELLED')",
+            name="charging_session_status",
+        ),
         Index(
             "uq_charging_sessions_active_charger",
             "charger_id",
@@ -72,7 +76,7 @@ class ChargingSession(TimestampMixin, Base):
             ChargingSessionStatus,
             name="charging_session_status",
             native_enum=False,
-            create_constraint=True,
+            create_constraint=False,
             validate_strings=True,
         ),
         default=ChargingSessionStatus.CREATED,

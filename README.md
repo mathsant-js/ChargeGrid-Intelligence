@@ -67,13 +67,13 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
-- [Fase 3 — Simulação e leituras (validação pendente)](docs/PHASE_3.md)
+- [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
 
 ## Estado atual
 
-As Fases 1 (fundação) e 2 (domínio) estão concluídas, com critérios de saída e
-evidências documentados. A Fase 3 tem implementação e testes concluídos, mas
-aguarda validação online das migrations em PostgreSQL. O backend entrega
+As Fases 1 (fundação), 2 (domínio) e 3 (simulação e leituras) estão concluídas,
+com critérios de saída e evidências documentados. As migrations da Fase 3 foram
+validadas online em PostgreSQL. O backend entrega
 Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
 autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.

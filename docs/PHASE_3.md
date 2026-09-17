@@ -20,7 +20,7 @@ Este controle em memória é adequado para a demonstração com **um processo we
 
 A Fase 3 usa as migrations existentes de `station_peak_solar_kw` e unicidade de tick (`20260916_0009` e `20260916_0010`). O controle administrativo não altera o schema, portanto não há migration nova. Os testes cobrem relógio, curva solar, transação, rollback, idempotência, autenticação, autorização, ciclo administrativo, leitura e OpenAPI.
 
-Na validação desta entrega, `alembic heads` encontrou somente `20260916_0010 (head)` e `alembic upgrade head --sql` gerou SQL offline para PostgreSQL. O `alembic check` e o upgrade online não puderam ser concluídos: não havia PostgreSQL em `localhost:5432` e o daemon Docker recusou acesso ao socket. Uma tentativa de upgrade sobre SQLite parou na migration `0006`, que usa alteração de constraint não suportada pelo dialect SQLite. Não houve alteração de schema nesta entrega. A validação online das migrations existentes permanece como limitação operacional.
+Na validação desta entrega, `alembic heads` encontrou somente `20260916_0010 (head)` e `alembic upgrade head --sql` gerou SQL offline para PostgreSQL. Posteriormente, `alembic upgrade head` foi executado em um PostgreSQL 16 temporário e chegou à revisão `20260916_0010`; `alembic check` concluiu sem operações pendentes. As três constraints de enum das migrations `0006` e `0007` passaram a ser declaradas explicitamente nos modelos: o Alembic 1.19 não compara constraints vinculadas ao tipo `Enum`, embora elas estivessem presentes no banco. Não houve alteração do schema nem migration nova. O banco temporário foi removido após a validação.
 
 Ruff e mypy passaram; pytest concluiu 144 testes backend. Vitest concluiu 2 testes frontend; ESLint, typecheck TypeScript e build Vite passaram.
 

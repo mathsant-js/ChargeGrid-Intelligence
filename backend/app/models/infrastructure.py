@@ -35,7 +35,12 @@ class ChargingStation(TimestampMixin, Base):
 
 class Charger(TimestampMixin, Base):
     __tablename__ = "chargers"
-    __table_args__ = (CheckConstraint("max_power_kw > 0", name="ck_chargers_max_power_positive"),)
+    __table_args__ = (
+        CheckConstraint("max_power_kw > 0", name="ck_chargers_max_power_positive"),
+        CheckConstraint(
+            "status IN ('AVAILABLE', 'CHARGING', 'UNAVAILABLE')", name="charger_status"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     station_id: Mapped[uuid.UUID] = mapped_column(
@@ -49,7 +54,7 @@ class Charger(TimestampMixin, Base):
             ChargerStatus,
             name="charger_status",
             native_enum=False,
-            create_constraint=True,
+            create_constraint=False,
             validate_strings=True,
         ),
         default=ChargerStatus.AVAILABLE,
