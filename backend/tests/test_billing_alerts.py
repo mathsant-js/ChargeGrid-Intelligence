@@ -4,12 +4,15 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.models.billing import Tariff
-from app.models.energy import ChargingSession
+from app.models.alert import Alert
+from app.models.billing import Invoice, Tariff
+from app.models.energy import ChargingSession, ChargingSessionStatus
+from app.models.infrastructure import Charger, ChargerStatus
 from app.models.user import User, UserRole
 from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD
 from tests.test_auth_authorization import login_headers
@@ -20,6 +23,82 @@ from tests.test_charging_session_domain import (
     start_session,
 )
 from tests.test_energy import create_session_dependencies
+
+
+@pytest.mark.parametrize(
+    ("energy_kwh", "expected_total"),
+    [(25, "23.00"), (0.125, "0.12"), (0, "0.00")],
+)
+@pytest.mark.anyio
+async def test_stop_bills_accumulated_energy_once(
+    client: AsyncClient, db_session: Session, energy_kwh: float, expected_total: str
+) -> None:
+    _, headers = await create_user_and_headers(client, suffix=f"billing-{energy_kwh}")
+    vehicle = await create_vehicle(client, headers, suffix=f"billing-{energy_kwh}")
+    charger = await create_charger(client, suffix=f"billing-{energy_kwh}")
+    started = await start_session(client, headers, vehicle, charger)
+    session_id = UUID(started.json()["id"])
+    session = db_session.get(ChargingSession, session_id)
+    assert session is not None
+    session.energy_consumed_kwh = energy_kwh
+    db_session.commit()
+
+    stopped = await client.post(f"/api/v1/sessions/{session_id}/stop", headers=headers)
+    assert stopped.status_code == 200
+    assert stopped.json()["total_cost"] == expected_total
+    assert stopped.json()["status"] == "COMPLETED"
+    assert (await client.get(f"/api/v1/chargers/{charger['id']}")).json()["status"] == "AVAILABLE"
+    invoices = list(db_session.scalars(select(Invoice).where(Invoice.session_id == session_id)))
+    assert len(invoices) == 1
+    assert invoices[0].status.value == "CLOSED"
+    assert invoices[0].total == invoices[0].subtotal == Decimal(expected_total)
+    assert invoices[0].tariff_per_kwh == Decimal("0.9200")
+    assert invoices[0].energy_kwh == Decimal(str(energy_kwh))
+
+    repeated = await client.post(f"/api/v1/sessions/{session_id}/stop", headers=headers)
+    assert repeated.status_code == 409
+    invoices = list(db_session.scalars(select(Invoice).where(Invoice.session_id == session_id)))
+    assert len(invoices) == 1
+
+
+@pytest.mark.anyio
+async def test_invoice_failure_rolls_back_session_charger_and_alert(
+    client: AsyncClient, db_session: Session
+) -> None:
+    _, headers = await create_user_and_headers(client, suffix="invoice-rollback")
+    vehicle = await create_vehicle(client, headers, suffix="invoice-rollback")
+    charger = await create_charger(client, suffix="invoice-rollback")
+    started = await start_session(client, headers, vehicle, charger)
+    session_id = UUID(started.json()["id"])
+    session = db_session.get(ChargingSession, session_id)
+    assert session is not None
+    session.energy_consumed_kwh = 25
+    db_session.commit()
+
+    def reject_invoice(*_: object) -> None:
+        raise IntegrityError("INSERT invoice", {}, Exception("simulated invoice failure"))
+
+    event.listen(Invoice, "before_insert", reject_invoice)
+    try:
+        with pytest.raises(IntegrityError, match="simulated invoice failure"):
+            await client.post(f"/api/v1/sessions/{session_id}/stop", headers=headers)
+    finally:
+        event.remove(Invoice, "before_insert", reject_invoice)
+
+    db_session.expire_all()
+    session = db_session.get(ChargingSession, session_id)
+    assert session is not None
+    assert session.status == ChargingSessionStatus.CHARGING
+    assert session.ended_at is None
+    assert session.total_cost == Decimal("0.00")
+    stored_charger = db_session.get(Charger, UUID(charger["id"]))
+    assert stored_charger is not None
+    assert stored_charger.status == ChargerStatus.CHARGING
+    assert db_session.scalar(select(Invoice).where(Invoice.session_id == session_id)) is None
+    station_alert = db_session.scalar(
+        select(Alert).where(Alert.station_id == UUID(charger["station_id"]))
+    )
+    assert station_alert is None
 
 
 @pytest.mark.anyio
