@@ -76,7 +76,7 @@ async def reset_simulation(
 async def run_simulation_tick(
     db: DbSession, _: AdminUser, control: Controller
 ) -> SimulationTickResponse:
-    """Run exactly one transactional tick while RUNNING. Phase 3 allocates zero power."""
+    """Run exactly one transactional tick while RUNNING."""
     result = control.tick(db)
     if result is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Simulation is stopped")

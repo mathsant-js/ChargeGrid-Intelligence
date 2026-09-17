@@ -167,7 +167,7 @@ async def test_simulation_lifecycle_readings_filters_and_reset(
     assert db_session.scalar(select(func.count()).select_from(SolarReading)) == 1
     session = db_session.get(ChargingSession, session_id)
     assert session is not None
-    assert session.energy_consumed_kwh == 0
+    assert session.energy_consumed_kwh == pytest.approx(11 * 2 / 60)
     for resource in ("energy", "solar"):
         current_response = await client.get(
             f"/api/v1/{resource}/current", params={"station_id": str(station_id)}
@@ -198,7 +198,10 @@ async def test_simulation_lifecycle_readings_filters_and_reset(
             params={"from": (INSTANT + timedelta(seconds=1)).isoformat()},
         )
         assert after.json() == []
-    assert (await client.get("/api/v1/energy/current")).json()["allocated_power_kw"] == 0
+    energy = (await client.get("/api/v1/energy/current")).json()
+    assert energy["allocated_power_kw"] == 11
+    assert energy["solar_power_kw"] == 10
+    assert energy["grid_power_kw"] == 1
     assert (await client.get("/api/v1/solar/current")).json()["available_power_kw"] == 10
 
 

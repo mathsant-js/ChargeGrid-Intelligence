@@ -1,6 +1,6 @@
 """Persist one deterministic simulator tick using an injected power resolver.
 
-The resolver owns allocation and solar distribution (Phase 4). This service
+The resolver owns allocation and solar distribution. This service
 only checks its safety invariants and records the resulting interval energy.
 """
 
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.vehicle import Vehicle
+from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.services.energy_readings import ABSOLUTE_TOLERANCE, build_energy_reading_data
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.energy_data import EnergyDataProvider
@@ -26,23 +27,8 @@ from app.simulation.energy_data import EnergyDataProvider
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class SessionPowerRequest:
-    session_id: UUID
-    requested_power_kw: float
-    charger_max_power_kw: float
-    vehicle_max_charge_power_kw: float
-
-
-@dataclass(frozen=True, slots=True)
-class PowerBreakdown:
-    allocated_power_kw: float
-    solar_power_kw: float
-    grid_power_kw: float
-
-
 class PowerResolver(Protocol):
-    """Phase 4 supplies one breakdown for each charging session at a station."""
+    """Supply one breakdown for each charging session at a station."""
 
     def resolve(
         self,

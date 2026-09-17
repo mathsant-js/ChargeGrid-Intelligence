@@ -1,35 +1,20 @@
-"""Single-process, manually driven simulator control for the Phase 3 MVP."""
+"""Single-process, manually driven simulator control."""
 
 import logging
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from threading import RLock
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.energy import EnergyReading, SolarReading
 from app.models.prediction import SystemConfiguration
+from app.services.energy_allocation import EqualSharePowerResolver
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.energy_data import SimulationEnergyDataProvider
-from app.simulation.tick import PowerBreakdown, SessionPowerRequest, TickResult, execute_tick
+from app.simulation.tick import TickResult, execute_tick
 
 logger = logging.getLogger(__name__)
-
-
-class ZeroPowerResolver:
-    """Safe Phase 3 placeholder until Phase 4 supplies power allocation."""
-
-    def resolve(
-        self,
-        *,
-        station_id: UUID,
-        grid_limit_kw: float,
-        solar_available_kw: float,
-        sessions: Sequence[SessionPowerRequest],
-    ) -> dict[UUID, PowerBreakdown]:
-        return {item.session_id: PowerBreakdown(0, 0, 0) for item in sessions}
 
 
 class SimulationController:
@@ -96,7 +81,7 @@ class SimulationController:
                     db,
                     clock=self.clock,
                     solar_provider=SimulationEnergyDataProvider(),
-                    power_resolver=ZeroPowerResolver(),
+                    power_resolver=EqualSharePowerResolver(),
                 )
             except Exception:
                 logger.exception("simulation_control_tick_failed")

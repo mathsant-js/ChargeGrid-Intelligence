@@ -83,8 +83,10 @@ A Fase 3 contém relógio determinístico, provedor solar e o serviço
 injetável por estação, valida os limites físicos e persiste as leituras e os
 acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
 status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
-Até a Fase 4, o resolvedor HTTP aloca zero kW. Alocação, limite de rede na
-distribuição e prioridade solar pertencem à Fase 4.
+O controle de simulação usa a política Equal Share Allocation V1: divide a
+capacidade da rede mais a geração solar entre sessões `CHARGING`, respeita os
+limites individuais e redistribui sobras. A potência solar é usada primeiro e
+rateada proporcionalmente à potência alocada; a parcela restante vem da rede.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
