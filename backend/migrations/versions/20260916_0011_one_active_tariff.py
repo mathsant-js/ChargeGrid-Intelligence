@@ -16,7 +16,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    connection = op.get_bind()
     tariffs = sa.table(
         "tariffs",
         sa.column("id", sa.Uuid()),
@@ -24,15 +23,18 @@ def upgrade() -> None:
         sa.column("valid_from", sa.DateTime(timezone=True)),
         sa.column("created_at", sa.DateTime(timezone=True)),
     )
-    active_ids = connection.execute(
-        sa.select(tariffs.c.id)
-        .where(tariffs.c.is_active.is_(True))
-        .order_by(tariffs.c.valid_from.desc(), tariffs.c.created_at.desc(), tariffs.c.id.desc())
-    ).scalars().all()
-    if len(active_ids) > 1:
-        connection.execute(
-            sa.update(tariffs).where(tariffs.c.id.in_(active_ids[1:])).values(is_active=False)
-        )
+    ranked = sa.select(
+        tariffs.c.id,
+        sa.func.row_number().over(
+            order_by=(
+                tariffs.c.valid_from.desc(), tariffs.c.created_at.desc(), tariffs.c.id.desc()
+            )
+        ).label("position"),
+    ).where(tariffs.c.is_active.is_(True)).subquery()
+    obsolete_ids = sa.select(ranked.c.id).where(ranked.c.position > 1)
+    op.execute(
+        sa.update(tariffs).where(tariffs.c.id.in_(obsolete_ids)).values(is_active=False)
+    )
     op.create_index(
         "uq_tariffs_one_active", "tariffs", ["is_active"], unique=True,
         postgresql_where=sa.text("is_active"), sqlite_where=sa.text("is_active = 1"),

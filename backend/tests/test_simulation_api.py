@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
 from app.main import app
+from app.models.billing import Invoice
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
@@ -20,8 +21,99 @@ from app.models.vehicle import Vehicle
 from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.simulation.clock import SimulationClock
 from app.simulation.control import SimulationController, get_simulation_controller
+from tests.test_charging_session_domain import (
+    create_user_and_headers,
+    create_vehicle,
+    start_session,
+)
 
 INSTANT = datetime(2026, 9, 16, 12, tzinfo=UTC)
+
+
+@pytest.mark.anyio
+async def test_phase_5_session_ticks_close_and_invoice_history(
+    client: AsyncClient, db_session: Session, control: SimulationController
+) -> None:
+    user, headers = await create_user_and_headers(client, suffix="phase-5-flow")
+    vehicle = await create_vehicle(client, headers, suffix="phase-5-flow")
+    station_response = await client.post(
+        "/api/v1/stations",
+        json={"name": "Billing station", "grid_limit_kw": 20, "station_peak_solar_kw": 3},
+    )
+    assert station_response.status_code == 201
+    station = station_response.json()
+    charger_response = await client.post(
+        "/api/v1/chargers",
+        json={
+            "station_id": station["id"], "name": "Billing charger", "code": "PHASE-5",
+            "max_power_kw": 11,
+        },
+    )
+    assert charger_response.status_code == 201
+    charger = charger_response.json()
+
+    started = await start_session(client, headers, vehicle, charger)
+    assert started.status_code == 201
+    session_id = started.json()["id"]
+    assert started.json()["status"] == "CHARGING"
+    assert started.json()["tariff_per_kwh"] == "0.9200"
+    assert (await client.get(f"/api/v1/chargers/{charger['id']}")).json()["status"] == "CHARGING"
+
+    assert (await client.post("/api/v1/simulation/start")).status_code == 200
+    for _ in range(3):
+        tick = await client.post("/api/v1/simulation/ticks")
+        assert tick.status_code == 200
+        assert tick.json()["energy_readings_created"] == 1
+    assert control.clock.current_instant == INSTANT + timedelta(minutes=3)
+
+    db_session.rollback()
+    readings = list(
+        db_session.scalars(
+            select(EnergyReading)
+            .where(EnergyReading.session_id == UUID(session_id))
+            .order_by(EnergyReading.timestamp)
+        )
+    )
+    assert len(readings) == 3
+    assert [reading.timestamp for reading in readings] == [
+        INSTANT.replace(tzinfo=None) + timedelta(minutes=minute) for minute in range(3)
+    ]
+    assert all(reading.allocated_power_kw == 11 for reading in readings)
+    assert all(reading.grid_power_kw <= station["grid_limit_kw"] for reading in readings)
+    energy = sum(reading.interval_energy_kwh for reading in readings)
+    solar = sum(reading.solar_energy_kwh for reading in readings)
+    grid = sum(reading.grid_energy_kwh for reading in readings)
+    assert energy == pytest.approx(0.55)
+    assert solar > 0
+    assert grid > 0
+    assert energy == pytest.approx(solar + grid)
+
+    stopped = await client.post(f"/api/v1/sessions/{session_id}/stop", headers=headers)
+    assert stopped.status_code == 200
+    assert stopped.json()["status"] == "COMPLETED"
+    assert stopped.json()["energy_consumed_kwh"] == pytest.approx(energy)
+    assert stopped.json()["solar_energy_kwh"] == pytest.approx(solar)
+    assert stopped.json()["grid_energy_kwh"] == pytest.approx(grid)
+    assert stopped.json()["allocated_power_kw"] == 0
+    assert stopped.json()["ended_at"] is not None
+    assert stopped.json()["total_cost"] == "0.51"
+    assert (await client.get(f"/api/v1/chargers/{charger['id']}")).json()["status"] == "AVAILABLE"
+
+    history = await client.get("/api/v1/billing/invoices", headers=headers)
+    assert history.status_code == 200
+    assert len(history.json()) == 1
+    invoice = history.json()[0]
+    assert invoice["session_id"] == session_id
+    assert invoice["user_id"] == user["id"]
+    assert invoice["status"] == "CLOSED"
+    assert Decimal(invoice["energy_kwh"]) == Decimal("0.5500")
+    assert invoice["tariff_per_kwh"] == "0.9200"
+    assert invoice["subtotal"] == invoice["total"] == "0.51"
+    assert invoice["closed_at"] is not None
+    detail = await client.get(f"/api/v1/billing/invoices/{invoice['id']}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json() == invoice
+    assert db_session.query(Invoice).filter_by(session_id=UUID(session_id)).count() == 1
 
 
 @pytest.fixture
