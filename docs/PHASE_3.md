@@ -6,7 +6,7 @@ O backend possui relógio simulado determinístico, curva solar por estação, s
 
 `status` informa estado, instante UTC atual, duração simulada do tick em segundos, `simulation_speed` e timestamp do último tick concluído. `start` e `stop` são idempotentes e retornam 200 com o mesmo estado quando repetidos. `start` carrega `simulation_speed` da `SystemConfiguration`, quando presente. Sem configuração, o padrão é 60 segundos simulados por segundo real; o tick manual representa um segundo real.
 
-`POST /ticks` exige estado RUNNING, executa uma vez `execute_tick` e retorna 409 se o simulador estiver parado. O serviço de tick abre uma transação para as leituras e acumuladores, confirma antes de avançar o relógio e registra sucesso ou falha. Sem sessões CHARGING, o relógio ainda avança. A resolução de potência provisória da Fase 3 aloca **zero kW** para cada sessão ativa. Isso gera leituras de energia com zero consumo e mantém os limites físicos, enquanto a curva solar gera `SolarReading` para cada estação com sessão ativa. O resolvedor é injetável; os testes do serviço exercitam leituras com potência não nula por um resolvedor de teste.
+`POST /ticks` exige estado RUNNING, executa uma vez `execute_tick` e retorna 409 se o simulador estiver parado. O serviço de tick abre uma transação para as leituras e acumuladores, confirma antes de avançar o relógio e registra sucesso ou falha. Sem sessões CHARGING, o relógio ainda avança. Na entrega original da Fase 3, a resolução provisória alocava **zero kW**; a Fase 4 a substituiu por Equal Share Allocation V1. Consulte [Fase 4](PHASE_4.md) para o comportamento atual do tick. O resolvedor permanece injetável para testes do serviço.
 
 `reset` exige STOPPED e retorna 409 durante RUNNING. Ele limpa somente o estado do relógio e o marcador do último tick. O novo instante é o maior entre o horário UTC atual e o último timestamp persistido de energia ou solar mais uma duração de tick. Assim a próxima execução não reutiliza timestamps. **Nenhuma `EnergyReading` ou `SolarReading` é apagada**, nem são zerados acumuladores de sessões. Leituras continuam disponíveis nos endpoints `/energy/current`, `/energy/history`, `/solar/current` e `/solar/history`, inclusive com filtros `station_id`, `from` e `to` nos históricos.
 
@@ -24,8 +24,8 @@ Na validação desta entrega, `alembic heads` encontrou somente `20260916_0010 (
 
 Ruff e mypy passaram; pytest concluiu 144 testes backend. Vitest concluiu 2 testes frontend; ESLint, typecheck TypeScript e build Vite passaram.
 
-## Próxima fase
+## Evolução posterior
 
-**Alocação de potência, limite de rede na distribuição e prioridade solar permanecem para a Fase 4.** O serviço de tick já valida os limites de uma resolução injetada; o resolvedor de produção ainda precisa implementar essas regras.
+Alocação de potência, limite de rede na distribuição e prioridade solar foram entregues na Fase 4.
 
 Alertas e analytics derivados por tick previstos no fluxo completo do SPEC ainda dependem das fases posteriores desses módulos.

@@ -49,9 +49,13 @@ class EqualSharePowerResolver:
                 raise ValueError("duplicate charging session")
             limits[session.session_id] = min(values)
 
+        available = grid_limit_kw + solar_available_kw
+        if not math.isfinite(available):
+            raise ValueError("total station power must be finite")
+
         allocated = {session_id: 0.0 for session_id in limits}
         active = {session_id for session_id, limit in limits.items() if limit > 0}
-        remaining = grid_limit_kw + solar_available_kw
+        remaining = available
         while active and remaining > 0:
             share = remaining / len(active)
             capped = {session_id for session_id in active if limits[session_id] <= share}

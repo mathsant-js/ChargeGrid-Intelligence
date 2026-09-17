@@ -35,6 +35,13 @@ def test_solar_adds_to_capacity_and_is_shared_proportionally() -> None:
     ]
 
 
+def test_solar_acceptance_uses_25_kw_before_15_kw_grid() -> None:
+    result = resolve([20, 20], grid=15, solar=25)
+    assert sum(row[0] for row in result) == 40
+    assert sum(row[1] for row in result) == 25
+    assert sum(row[2] for row in result) == 15
+
+
 def test_unequal_requests_redistribute_unused_share() -> None:
     result = resolve([5, 20, 20, 20], grid=45)
     assert [row[0] for row in result] == [5, 40 / 3, 40 / 3, 40 / 3]
@@ -58,3 +65,8 @@ def test_invalid_power_is_rejected(power: float) -> None:
         resolve([power], grid=60)
     with pytest.raises(ValueError):
         resolve([20], grid=power)
+
+
+def test_finite_inputs_with_overflowing_total_capacity_are_rejected() -> None:
+    with pytest.raises(ValueError, match="total station power must be finite"):
+        resolve([20], grid=1e308, solar=1e308)
