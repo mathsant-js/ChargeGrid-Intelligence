@@ -5,9 +5,16 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select, update
 
-from app.api.dependencies import AdminUser
-from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
+from app.api.dependencies import AdminUser, CurrentUser
+from app.api.routes.common import (
+    NOT_FOUND_RESPONSE,
+    UNAUTHORIZED_RESPONSE,
+    DbSession,
+    commit_or_conflict,
+    get_or_404,
+)
 from app.models.billing import Invoice, InvoiceStatus, Tariff
+from app.models.user import UserRole
 from app.schemas.billing import InvoiceResponse, TariffCreate, TariffResponse, TariffUpdate
 
 router = APIRouter(tags=["billing"])
@@ -64,13 +71,22 @@ async def update_tariff(
     return tariff
 
 
-@router.get("/billing/invoices", response_model=list[InvoiceResponse])
+@router.get(
+    "/billing/invoices",
+    response_model=list[InvoiceResponse],
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
 async def list_invoices(
     db: DbSession,
+    current_user: CurrentUser,
     user_id: UUID | None = None,
     invoice_status: Annotated[InvoiceStatus | None, Query(alias="status")] = None,
 ) -> list[Invoice]:
     statement = select(Invoice)
+    if current_user.role != UserRole.ADMIN:
+        if user_id is not None and user_id != current_user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
+        statement = statement.where(Invoice.user_id == current_user.id)
     if user_id is not None:
         statement = statement.where(Invoice.user_id == user_id)
     if invoice_status is not None:
@@ -78,6 +94,13 @@ async def list_invoices(
     return list(db.scalars(statement.order_by(Invoice.created_at, Invoice.id)).all())
 
 
-@router.get("/billing/invoices/{invoice_id}", response_model=InvoiceResponse)
-async def get_invoice(invoice_id: UUID, db: DbSession) -> Invoice:
-    return get_or_404(db, Invoice, invoice_id)
+@router.get(
+    "/billing/invoices/{invoice_id}",
+    response_model=InvoiceResponse,
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
+async def get_invoice(invoice_id: UUID, db: DbSession, current_user: CurrentUser) -> Invoice:
+    invoice = get_or_404(db, Invoice, invoice_id)
+    if current_user.role != UserRole.ADMIN and invoice.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
+    return invoice

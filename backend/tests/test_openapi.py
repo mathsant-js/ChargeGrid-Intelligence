@@ -26,6 +26,8 @@ async def test_openapi_is_available() -> None:
     assert "/api/v1/solar/history" in paths
     assert "/api/v1/predictions/demand" in paths
     assert "/api/v1/system-configuration" in paths
+    assert "/api/v1/billing/invoices" in paths
+    assert "/api/v1/billing/invoices/{invoice_id}" in paths
 
     bearer = [{"HTTPBearer": []}]
     protected_operations = {
@@ -51,6 +53,8 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/sessions/{session_id}", "get"),
         ("/api/v1/sessions/start", "post"),
         ("/api/v1/sessions/{session_id}/stop", "post"),
+        ("/api/v1/billing/invoices", "get"),
+        ("/api/v1/billing/invoices/{invoice_id}", "get"),
     }
     for path, method in protected_operations:
         assert paths[path][method]["security"] == bearer
@@ -82,6 +86,8 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/sessions/{session_id}", "get"): {"401", "404"},
         ("/api/v1/sessions/start", "post"): {"401", "403", "404", "409"},
         ("/api/v1/sessions/{session_id}/stop", "post"): {"401", "403", "404", "409"},
+        ("/api/v1/billing/invoices", "get"): {"401", "404"},
+        ("/api/v1/billing/invoices/{invoice_id}", "get"): {"401", "404"},
     }
     for (path, method), expected_statuses in expected_error_responses.items():
         responses = paths[path][method]["responses"]
@@ -89,3 +95,8 @@ async def test_openapi_is_available() -> None:
         for response_status in expected_statuses:
             schema = responses[response_status]["content"]["application/json"]["schema"]
             assert schema == {"$ref": "#/components/schemas/ErrorResponse"}
+
+    invoice_parameters = paths["/api/v1/billing/invoices"]["get"]["parameters"]
+    assert {(item["name"], item["in"]) for item in invoice_parameters} == {
+        ("user_id", "query"), ("status", "query")
+    }

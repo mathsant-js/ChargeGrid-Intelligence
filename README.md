@@ -69,6 +69,7 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
 - [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
 - [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
+- [Fase 5 — Billing e histórico de invoices](docs/PHASE_5.md)
 
 ## Estado atual
 
