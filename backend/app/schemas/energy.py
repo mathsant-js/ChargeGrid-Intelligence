@@ -50,6 +50,13 @@ class ReadingResponse(BaseModel):
     id: UUID
     timestamp: datetime
 
+    @field_validator("timestamp")
+    @classmethod
+    def normalize_timestamp_utc(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
 
 class EnergyReadingResponse(ReadingResponse):
     session_id: UUID

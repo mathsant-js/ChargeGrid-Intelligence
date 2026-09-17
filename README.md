@@ -67,19 +67,24 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
+- [Fase 3 — Simulação e leituras (validação pendente)](docs/PHASE_3.md)
 
 ## Estado atual
 
 As Fases 1 (fundação) e 2 (domínio) estão concluídas, com critérios de saída e
-evidências documentados. O backend entrega Users/Auth, Vehicles, Stations, Chargers
-e Sessions sob `/api/v1`, com JWT, autorização por papel e propriedade, persistência
+evidências documentados. A Fase 3 tem implementação e testes concluídos, mas
+aguarda validação online das migrations em PostgreSQL. O backend entrega
+Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
+autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
 
-A Fase 3 já contém relógio determinístico, provedor solar e o serviço
+A Fase 3 contém relógio determinístico, provedor solar e o serviço
 `app.simulation.tick.execute_tick`. O serviço recebe uma resolução de potência
 injetável por estação, valida os limites físicos e persiste as leituras e os
-acumuladores em uma transação. Não há loop automático nem rota pública para
-acioná-lo. A implementação de alocação e rateio pertence à Fase 4.
+acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
+status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
+Até a Fase 4, o resolvedor HTTP aloca zero kW. Alocação, limite de rede na
+distribuição e prioridade solar pertencem à Fase 4.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
