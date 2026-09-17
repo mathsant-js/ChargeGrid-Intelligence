@@ -1,5 +1,6 @@
 """Administrative simulation lifecycle and read API integration."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -16,6 +17,7 @@ from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
 from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
+from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.simulation.clock import SimulationClock
 from app.simulation.control import SimulationController, get_simulation_controller
 
@@ -34,19 +36,30 @@ def control() -> SimulationController:
     app.dependency_overrides.pop(get_simulation_controller, None)
 
 
-def seed_charging_session(db: Session) -> tuple[UUID, UUID]:
-    user = User(name="Driver", email="driver-simulation@example.com", password_hash="hash")
-    station = ChargingStation(name="Solar station", grid_limit_kw=20, station_peak_solar_kw=10)
+def seed_charging_session(
+    db: Session,
+    *,
+    station: ChargingStation | None = None,
+    grid_limit_kw: float = 20,
+    solar_peak_kw: float = 10,
+    requested_power_kw: float = 11,
+    max_power_kw: float = 11,
+) -> tuple[UUID, UUID]:
+    marker = str(uuid4())
+    user = User(name="Driver", email=f"driver-{marker}@example.com", password_hash="hash")
+    station = station or ChargingStation(
+        name="Solar station", grid_limit_kw=grid_limit_kw, station_peak_solar_kw=solar_peak_kw
+    )
     db.add_all([user, station])
     db.flush()
-    charger = Charger(station_id=station.id, name="C1", code="SIM-1", max_power_kw=11)
+    charger = Charger(station_id=station.id, name="C1", code=marker, max_power_kw=max_power_kw)
     vehicle = Vehicle(
         user_id=user.id,
         name="EV",
         brand="B",
         model="M",
-        license_plate="SIM-EV",
-        max_charge_power_kw=11,
+        license_plate=marker[:8],
+        max_charge_power_kw=max_power_kw,
     )
     db.add_all([charger, vehicle])
     db.flush()
@@ -55,7 +68,7 @@ def seed_charging_session(db: Session) -> tuple[UUID, UUID]:
         vehicle_id=vehicle.id,
         charger_id=charger.id,
         status=ChargingSessionStatus.CHARGING,
-        requested_power_kw=11,
+        requested_power_kw=requested_power_kw,
         allocated_power_kw=0,
         energy_consumed_kwh=0,
         solar_energy_kwh=0,
@@ -167,7 +180,7 @@ async def test_simulation_lifecycle_readings_filters_and_reset(
     assert db_session.scalar(select(func.count()).select_from(SolarReading)) == 1
     session = db_session.get(ChargingSession, session_id)
     assert session is not None
-    assert session.energy_consumed_kwh == 0
+    assert session.energy_consumed_kwh == pytest.approx(11 * 2 / 60)
     for resource in ("energy", "solar"):
         current_response = await client.get(
             f"/api/v1/{resource}/current", params={"station_id": str(station_id)}
@@ -198,13 +211,137 @@ async def test_simulation_lifecycle_readings_filters_and_reset(
             params={"from": (INSTANT + timedelta(seconds=1)).isoformat()},
         )
         assert after.json() == []
-    assert (await client.get("/api/v1/energy/current")).json()["allocated_power_kw"] == 0
+    energy = (await client.get("/api/v1/energy/current")).json()
+    assert energy["allocated_power_kw"] == 11
+    assert energy["solar_power_kw"] == 10
+    assert energy["grid_power_kw"] == 1
     assert (await client.get("/api/v1/solar/current")).json()["available_power_kw"] == 10
 
 
 @pytest.mark.anyio
+async def test_tick_allocates_each_station_and_records_energy_parts(
+    client: AsyncClient, db_session: Session, control: SimulationController
+) -> None:
+    station_a_id, first_id = seed_charging_session(
+        db_session,
+        grid_limit_kw=10,
+        solar_peak_kw=6,
+        requested_power_kw=12,
+        max_power_kw=12,
+    )
+    station_a = db_session.get(ChargingStation, station_a_id)
+    assert station_a is not None
+    _, second_id = seed_charging_session(
+        db_session, station=station_a, requested_power_kw=12, max_power_kw=12
+    )
+    station_b_id, third_id = seed_charging_session(
+        db_session,
+        grid_limit_kw=5,
+        solar_peak_kw=0,
+        requested_power_kw=9,
+        max_power_kw=9,
+    )
+
+    assert (await client.post("/api/v1/simulation/start")).status_code == 200
+    response = await client.post("/api/v1/simulation/ticks")
+    assert response.status_code == 200
+    assert response.json()["stations_processed"] == 2
+    assert response.json()["energy_readings_created"] == 3
+    assert control.clock.current_instant == INSTANT + timedelta(minutes=1)
+
+    db_session.rollback()
+    readings = {
+        reading.session_id: reading for reading in db_session.scalars(select(EnergyReading)).all()
+    }
+    assert set(readings) == {first_id, second_id, third_id}
+    expected = {
+        first_id: (12, 8, 3, 5),
+        second_id: (12, 8, 3, 5),
+        third_id: (9, 5, 0, 5),
+    }
+    for session_id, (requested, allocated, solar, grid) in expected.items():
+        reading = readings[session_id]
+        session = db_session.get(ChargingSession, session_id)
+        assert session is not None
+        assert reading.requested_power_kw == requested
+        assert reading.allocated_power_kw == pytest.approx(allocated)
+        assert reading.solar_power_kw == pytest.approx(solar)
+        assert reading.grid_power_kw == pytest.approx(grid)
+        assert reading.interval_energy_kwh == pytest.approx(allocated / 60)
+        assert reading.solar_energy_kwh == pytest.approx(solar / 60)
+        assert reading.grid_energy_kwh == pytest.approx(grid / 60)
+        assert reading.interval_energy_kwh == pytest.approx(
+            reading.solar_energy_kwh + reading.grid_energy_kwh
+        )
+        assert session.allocated_power_kw == pytest.approx(allocated)
+        assert session.energy_consumed_kwh == pytest.approx(reading.interval_energy_kwh)
+        assert session.solar_energy_kwh == pytest.approx(reading.solar_energy_kwh)
+        assert session.grid_energy_kwh == pytest.approx(reading.grid_energy_kwh)
+
+    solar_readings = db_session.scalars(select(SolarReading)).all()
+    assert {row.station_id: row.available_power_kw for row in solar_readings} == {
+        station_a_id: 6,
+        station_b_id: 0,
+    }
+    assert sum(readings[id].grid_power_kw for id in (first_id, second_id)) == pytest.approx(10)
+    assert readings[third_id].grid_power_kw == pytest.approx(5)
+
+
+@pytest.mark.anyio
+async def test_tick_rolls_back_all_stations_for_invalid_injected_resolver(
+    client: AsyncClient,
+    db_session: Session,
+    control: SimulationController,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_station, first_session = seed_charging_session(db_session)
+    second_station, second_session = seed_charging_session(db_session)
+    failing_station = max(first_station, second_station)
+
+    class InvalidResolver:
+        def resolve(
+            self,
+            *,
+            station_id: UUID,
+            grid_limit_kw: float,
+            solar_available_kw: float,
+            sessions: Sequence[SessionPowerRequest],
+        ) -> dict[UUID, PowerBreakdown]:
+            if station_id == failing_station:
+                return {
+                    item.session_id: PowerBreakdown(11, 0, grid_limit_kw + 1) for item in sessions
+                }
+            return {item.session_id: PowerBreakdown(11, 10, 1) for item in sessions}
+
+    monkeypatch.setattr("app.simulation.control.EqualSharePowerResolver", InvalidResolver)
+    assert (await client.post("/api/v1/simulation/start")).status_code == 200
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=dict(client.headers)
+    ) as safe_client:
+        response = await safe_client.post("/api/v1/simulation/ticks")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
+    assert control.clock.current_instant == INSTANT
+    assert control.last_tick is None
+    db_session.rollback()
+    assert db_session.scalar(select(func.count()).select_from(EnergyReading)) == 0
+    assert db_session.scalar(select(func.count()).select_from(SolarReading)) == 0
+    for session_id in (first_session, second_session):
+        session = db_session.get(ChargingSession, session_id)
+        assert session is not None
+        db_session.refresh(session)
+        assert session.allocated_power_kw == 0
+        assert session.energy_consumed_kwh == 0
+        assert session.solar_energy_kwh == 0
+        assert session.grid_energy_kwh == 0
+
+
+@pytest.mark.anyio
 async def test_failed_tick_keeps_clock_and_hides_internal_error(
-    client: AsyncClient, control: SimulationController, monkeypatch: pytest.MonkeyPatch,
+    client: AsyncClient,
+    control: SimulationController,
+    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     def fail_tick(*args: object, **kwargs: object) -> None:

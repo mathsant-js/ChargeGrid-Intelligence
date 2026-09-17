@@ -68,12 +68,13 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
 - [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
+- [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
 
 ## Estado atual
 
-As Fases 1 (fundação), 2 (domínio) e 3 (simulação e leituras) estão concluídas,
-com critérios de saída e evidências documentados. As migrations da Fase 3 foram
-validadas online em PostgreSQL. O backend entrega
+As Fases 1 (fundação), 2 (domínio), 3 (simulação e leituras) e 4 (gestão energética)
+estão concluídas, com critérios de saída e evidências documentados. As migrations
+da Fase 3 foram validadas online em PostgreSQL. O backend entrega
 Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
 autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
@@ -83,8 +84,14 @@ A Fase 3 contém relógio determinístico, provedor solar e o serviço
 injetável por estação, valida os limites físicos e persiste as leituras e os
 acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
 status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
-Até a Fase 4, o resolvedor HTTP aloca zero kW. Alocação, limite de rede na
-distribuição e prioridade solar pertencem à Fase 4.
+O controle de simulação usa a política Equal Share Allocation V1 da Fase 4:
+divide a capacidade da rede mais a geração solar entre sessões `CHARGING` de
+cada estação, respeita pedido, carregador e veículo, e redistribui sobras.
+A potência solar disponível cobre primeiro a demanda alocada e é rateada
+proporcionalmente; a parcela restante vem da rede, limitada por estação.
+Cada tick corresponde à duração configurada do relógio (60 segundos simulados
+por padrão), calcula energia em kWh e atualiza os acumuladores das sessões.
+Esta etapa ainda não gera alertas nem atualiza analytics derivados por tick.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
