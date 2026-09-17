@@ -67,15 +67,29 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
+- [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
 
 ## Estado atual
 
-As Fases 1 (fundação) e 2 (domínio) estão concluídas, com critérios de saída e
-evidências documentados. O backend entrega Users/Auth, Vehicles, Stations, Chargers
-e Sessions sob `/api/v1`, com JWT, autorização por papel e propriedade, persistência
+As Fases 1 (fundação), 2 (domínio) e 3 (simulação e leituras) estão concluídas,
+com critérios de saída e evidências documentados. As migrations da Fase 3 foram
+validadas online em PostgreSQL. O backend entrega
+Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
+autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
 
-O próximo incremento funcional é a Fase 3. Relógio/ticks do simulador, gestão e
-alocação energética, dashboards, ESG e treinamento/inferência de ML ainda não estão
-implementados. Estruturas preparatórias de dados de fases futuras existentes no
-backend não devem ser confundidas com esses fluxos completos.
+A Fase 3 contém relógio determinístico, provedor solar e o serviço
+`app.simulation.tick.execute_tick`. O serviço recebe uma resolução de potência
+injetável por estação, valida os limites físicos e persiste as leituras e os
+acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
+status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
+Até a Fase 4, o resolvedor HTTP aloca zero kW. Alocação, limite de rede na
+distribuição e prioridade solar pertencem à Fase 4.
+
+Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
+cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
+mesmo instante ignora estações já concluídas. Constraints no banco impedem
+duplicatas mesmo em escrita concorrente, e uma falha desfaz todo o tick. O
+relógio avança apenas depois do commit. O chamador deve passar uma sessão de
+banco sem transação ativa e um relógio iniciado; em caso de erro pode repetir
+o mesmo tick após corrigir a causa.

@@ -3,7 +3,17 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Numeric, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Numeric,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -31,6 +41,10 @@ class ChargingSession(TimestampMixin, Base):
         CheckConstraint("grid_energy_kwh >= 0", name="ck_sessions_grid_energy_nonnegative"),
         CheckConstraint("tariff_per_kwh >= 0", name="ck_sessions_tariff_nonnegative"),
         CheckConstraint("total_cost >= 0", name="ck_sessions_total_cost_nonnegative"),
+        CheckConstraint(
+            "status IN ('CREATED', 'CHARGING', 'PAUSED', 'COMPLETED', 'CANCELLED')",
+            name="charging_session_status",
+        ),
         Index(
             "uq_charging_sessions_active_charger",
             "charger_id",
@@ -62,7 +76,7 @@ class ChargingSession(TimestampMixin, Base):
             ChargingSessionStatus,
             name="charging_session_status",
             native_enum=False,
-            create_constraint=True,
+            create_constraint=False,
             validate_strings=True,
         ),
         default=ChargingSessionStatus.CREATED,
@@ -87,6 +101,7 @@ class ChargingSession(TimestampMixin, Base):
 class EnergyReading(Base):
     __tablename__ = "energy_readings"
     __table_args__ = (
+        UniqueConstraint("session_id", "timestamp", name="uq_energy_readings_session_tick"),
         CheckConstraint("requested_power_kw >= 0", name="ck_energy_readings_requested_nonnegative"),
         CheckConstraint("allocated_power_kw >= 0", name="ck_energy_readings_allocated_nonnegative"),
         CheckConstraint(
@@ -119,6 +134,7 @@ class EnergyReading(Base):
 class SolarReading(Base):
     __tablename__ = "solar_readings"
     __table_args__ = (
+        UniqueConstraint("station_id", "timestamp", name="uq_solar_readings_station_tick"),
         CheckConstraint("available_power_kw >= 0", name="ck_solar_readings_power_nonnegative"),
     )
 

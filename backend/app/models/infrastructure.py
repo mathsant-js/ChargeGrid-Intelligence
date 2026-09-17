@@ -16,12 +16,18 @@ class ChargerStatus(StrEnum):
 
 class ChargingStation(TimestampMixin, Base):
     __tablename__ = "charging_stations"
-    __table_args__ = (CheckConstraint("grid_limit_kw > 0", name="ck_stations_grid_limit_positive"),)
+    __table_args__ = (
+        CheckConstraint("grid_limit_kw > 0", name="ck_stations_grid_limit_positive"),
+        CheckConstraint(
+            "station_peak_solar_kw >= 0", name="ck_stations_peak_solar_nonnegative"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     grid_limit_kw: Mapped[float] = mapped_column(Float, nullable=False)
+    station_peak_solar_kw: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     chargers: Mapped[list["Charger"]] = relationship(back_populates="station")
@@ -29,7 +35,12 @@ class ChargingStation(TimestampMixin, Base):
 
 class Charger(TimestampMixin, Base):
     __tablename__ = "chargers"
-    __table_args__ = (CheckConstraint("max_power_kw > 0", name="ck_chargers_max_power_positive"),)
+    __table_args__ = (
+        CheckConstraint("max_power_kw > 0", name="ck_chargers_max_power_positive"),
+        CheckConstraint(
+            "status IN ('AVAILABLE', 'CHARGING', 'UNAVAILABLE')", name="charger_status"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     station_id: Mapped[uuid.UUID] = mapped_column(
@@ -43,7 +54,7 @@ class Charger(TimestampMixin, Base):
             ChargerStatus,
             name="charger_status",
             native_enum=False,
-            create_constraint=True,
+            create_constraint=False,
             validate_strings=True,
         ),
         default=ChargerStatus.AVAILABLE,

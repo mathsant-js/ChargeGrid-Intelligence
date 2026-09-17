@@ -1,7 +1,7 @@
 import uuid
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Enum, String
+from sqlalchemy import Boolean, CheckConstraint, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,6 +15,7 @@ class UserRole(StrEnum):
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint("role IN ('ADMIN', 'USER')", name="user_role"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -25,7 +26,7 @@ class User(TimestampMixin, Base):
             UserRole,
             name="user_role",
             native_enum=False,
-            create_constraint=True,
+            create_constraint=False,
             validate_strings=True,
         ),
         default=UserRole.USER,
