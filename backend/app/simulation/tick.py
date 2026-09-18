@@ -13,11 +13,13 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.alert import Alert, AlertSeverity, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
+from app.models.prediction import SystemConfiguration
 from app.models.vehicle import Vehicle
 from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.services.energy_readings import ABSOLUTE_TOLERANCE, build_energy_reading_data
@@ -70,6 +72,10 @@ def execute_tick(
     skipped = 0
     try:
         with db.begin():
+            configuration = db.scalar(select(SystemConfiguration).limit(1))
+            high_demand_threshold = (
+                configuration.high_demand_threshold if configuration is not None else 0.85
+            )
             rows = db.execute(
                 select(ChargingSession, Charger, Vehicle, ChargingStation)
                 .join(Charger, ChargingSession.charger_id == Charger.id)
@@ -140,6 +146,45 @@ def execute_tick(
                     or solar_total > solar_available + ABSOLUTE_TOLERANCE
                 ):
                     raise ValueError("solar power exceeds available generation")
+
+                previous_timestamp = timestamp - clock.tick_duration
+                previous_station_tick = db.scalar(
+                    select(SolarReading.id).where(
+                        SolarReading.station_id == station_id,
+                        SolarReading.timestamp == previous_timestamp,
+                    )
+                )
+                previous_grid_power = 0.0
+                if previous_station_tick is not None:
+                    previous_grid_power = (
+                        db.scalar(
+                            select(func.coalesce(func.sum(EnergyReading.grid_power_kw), 0.0))
+                            .join(ChargingSession, EnergyReading.session_id == ChargingSession.id)
+                            .join(Charger, ChargingSession.charger_id == Charger.id)
+                            .where(
+                                Charger.station_id == station_id,
+                                EnergyReading.timestamp == previous_timestamp,
+                            )
+                        )
+                        or 0.0
+                    )
+                if (
+                    grid_total / station.grid_limit_kw >= high_demand_threshold
+                    and previous_grid_power / station.grid_limit_kw < high_demand_threshold
+                ):
+                    db.add(
+                        Alert(
+                            station_id=station_id,
+                            type=AlertType.HIGH_DEMAND,
+                            severity=AlertSeverity.WARNING,
+                            title="High grid demand",
+                            message=(
+                                f"Grid import reached {grid_total:.2f} kW of the "
+                                f"{station.grid_limit_kw:.2f} kW station limit."
+                            ),
+                            created_at=timestamp,
+                        )
+                    )
 
                 db.add(
                     SolarReading(

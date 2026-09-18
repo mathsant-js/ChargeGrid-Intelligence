@@ -19,6 +19,11 @@ docker compose up --build
 Serviços:
 
 - frontend: <http://localhost:5173>
+
+O frontend usa `VITE_API_URL` (padrão: `http://localhost:8000/api/v1`). Entre com uma conta existente da API. O token é mantido no armazenamento local do navegador e validado em `/auth/me` ao recarregar; “Sair” ou uma resposta 401 remove a sessão. As rotas `/admin` e `/user` exigem o perfil correspondente.
+
+Em `/admin`, o gestor pode filtrar o dashboard por estação e período, consultar indicadores, gráficos, histórico e alertas, e reconhecer alertas pela API. A previsão e o risco de pico aparecem somente para uma estação com previsão futura válida; na ausência de dados de ML, a tela mostra um estado informativo.
+Em `/user`, o usuário consulta a recarga atual, o histórico de sessões e as invoices. O custo durante a recarga é uma estimativa; o valor fechado vem da invoice. Os dados são limitados ao usuário autenticado pela API.
 - API: <http://localhost:8000/api/v1/health>
 - OpenAPI: <http://localhost:8000/docs>
 - PostgreSQL: `localhost:5432`
@@ -70,6 +75,8 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
 - [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
 - [Fase 5 — Billing e histórico de invoices (concluída)](docs/PHASE_5.md)
+- [Fase 6 — Contratos da API de analytics](docs/PHASE_6_ANALYTICS.md)
+- [Fase 6 — Integração e limites](docs/PHASE_6.md)
 
 ## Estado atual
 
@@ -93,7 +100,10 @@ A potência solar disponível cobre primeiro a demanda alocada e é rateada
 proporcionalmente; a parcela restante vem da rede, limitada por estação.
 Cada tick corresponde à duração configurada do relógio (60 segundos simulados
 por padrão), calcula energia em kWh e atualiza os acumuladores das sessões.
-Esta etapa ainda não gera alertas nem atualiza analytics derivados por tick.
+O tick também cria `HIGH_DEMAND` quando a importação da rede atinge o limiar
+configurado em `SystemConfiguration` (0,85 na ausência de configuração). O
+alerta é emitido uma vez por episódio de alta demanda e participa da mesma
+transação das leituras. O tick ainda não atualiza analytics derivados.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
@@ -109,3 +119,18 @@ alerta na mesma transação. O histórico de invoices está disponível em
 `GET /api/v1/billing/invoices` e `GET /api/v1/billing/invoices/{invoice_id}`,
 com acesso restrito às próprias invoices para usuários comuns. Consulte
 [a validação da Fase 5](docs/PHASE_5.md) para os critérios de aceite e testes.
+Listagem e reconhecimento de alertas em `/api/v1/alerts` exigem papel ADMIN.
+
+A integração da Fase 6 cobre os dashboards administrativo e do usuário, os
+gráficos de demanda/solar/rede e faturamento, alertas e os indicadores de
+sustentabilidade. Um teste integrado percorre início de sessões, três ticks,
+redistribuição de potência, prioridade solar, alerta, encerramento, invoice e
+atualização das respostas dos dashboards. Os gráficos do gestor somam leituras
+simultâneas para mostrar a demanda total de cada tick. Veja os resultados e
+limites em [docs/PHASE_6.md](docs/PHASE_6.md).
+
+A Fase 6 ainda não está concluída: o KPI obrigatório de risco de pico depende
+de uma previsão futura válida, e o fluxo automático de previsão/classificação
+da Fase 7 ainda não existe. Sem esses dados, a tela mostra um estado
+informativo. O simulador também depende de ticks manuais pela API; não há
+seed reproduzível oficial para a demonstração completa.

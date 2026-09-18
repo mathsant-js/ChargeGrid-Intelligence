@@ -10,8 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.alert import Alert, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
+from app.models.prediction import SystemConfiguration
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.simulation.clock import SimulationClock
@@ -93,6 +95,127 @@ def counts(db: Session) -> tuple[int, int]:
     )
 
 
+def high_demand_alerts(db: Session) -> list[Alert]:
+    return list(db.scalars(select(Alert).where(Alert.type == AlertType.HIGH_DEMAND)))
+
+
+def configured_threshold(db: Session, threshold: float) -> None:
+    db.add(
+        SystemConfiguration(
+            simulation_speed=60,
+            grid_emission_factor_kg_per_kwh=0.1,
+            high_demand_threshold=threshold,
+            medium_peak_threshold=0.7,
+            high_peak_threshold=0.9,
+        )
+    )
+    db.commit()
+
+
+def test_high_demand_threshold_and_new_episode(db_session: Session) -> None:
+    station, session = add_session(db_session)
+    session_id = session.id
+    configured_threshold(db_session, 0.5)
+    resolver = FixedResolver({session_id: PowerBreakdown(10, 0, 10)})
+    tick_clock = clock()
+
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert len(high_demand_alerts(db_session)) == 1
+    assert high_demand_alerts(db_session)[0].station_id == station.id
+    assert high_demand_alerts(db_session)[0].severity.value == "WARNING"
+
+    db_session.rollback()
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert len(high_demand_alerts(db_session)) == 1
+
+    db_session.rollback()
+    resolver.powers[session_id] = PowerBreakdown(10, 1, 9)
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert len(high_demand_alerts(db_session)) == 1
+
+    db_session.rollback()
+    resolver.powers[session_id] = PowerBreakdown(9, 1, 8)
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert len(high_demand_alerts(db_session)) == 1
+
+    db_session.rollback()
+    resolver.powers[session_id] = PowerBreakdown(10, 0, 10)
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert len(high_demand_alerts(db_session)) == 2
+
+
+def test_high_demand_uses_grid_import_and_default_threshold(db_session: Session) -> None:
+    _, session = add_session(db_session)
+    session_id = session.id
+    tick_clock = clock()
+    resolver = FixedResolver({session_id: PowerBreakdown(10, 10, 0)})
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert high_demand_alerts(db_session) == []
+    db_session.rollback()
+    resolver.powers[session_id] = PowerBreakdown(11, 0, 11)
+    execute_tick(
+        db_session,
+        clock=tick_clock,
+        solar_provider=SimulationEnergyDataProvider(),
+        power_resolver=resolver,
+    )
+    assert high_demand_alerts(db_session) == []
+
+
+def test_high_demand_alert_rolls_back_with_later_station_failure(db_session: Session) -> None:
+    station_a, first = add_session(db_session)
+    station_b, second = add_session(db_session)
+    configured_threshold(db_session, 0.5)
+    ordered = sorted(((station_a.id, first.id), (station_b.id, second.id)))
+    resolver = FixedResolver(
+        {
+            ordered[0][1]: PowerBreakdown(10, 0, 10),
+            ordered[1][1]: PowerBreakdown(11, 0, 21),
+        }
+    )
+    tick_clock = clock()
+    with pytest.raises(ValueError, match="grid power exceeds station limit"):
+        execute_tick(
+            db_session,
+            clock=tick_clock,
+            solar_provider=SimulationEnergyDataProvider(),
+            power_resolver=resolver,
+        )
+    assert high_demand_alerts(db_session) == []
+    assert counts(db_session) == (0, 0)
+    assert tick_clock.current_instant == INSTANT
+
+
 def test_empty_and_noncharging_sessions_produce_nothing(db_session: Session) -> None:
     resolver = FixedResolver({})
     first = execute_tick(
@@ -103,6 +226,7 @@ def test_empty_and_noncharging_sessions_produce_nothing(db_session: Session) -> 
     )
     assert first.energy_readings_created == 0
     assert counts(db_session) == (0, 0)
+    assert high_demand_alerts(db_session) == []
     db_session.rollback()
     for status in (
         ChargingSessionStatus.CREATED,
@@ -120,6 +244,7 @@ def test_empty_and_noncharging_sessions_produce_nothing(db_session: Session) -> 
     )
     assert result.stations_processed == 0
     assert counts(db_session) == (0, 0)
+    assert high_demand_alerts(db_session) == []
     assert not resolver.calls
 
 
@@ -128,9 +253,7 @@ def test_multiple_sessions_stations_and_accumulators(
 ) -> None:
     station_a, first = add_session(db_session)
     _, second = add_session(db_session, station=station_a)
-    _, paused = add_session(
-        db_session, station=station_a, status=ChargingSessionStatus.PAUSED
-    )
+    _, paused = add_session(db_session, station=station_a, status=ChargingSessionStatus.PAUSED)
     station_b, third = add_session(db_session)
     resolver = FixedResolver(
         {
