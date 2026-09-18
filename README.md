@@ -19,6 +19,8 @@ docker compose up --build
 Serviços:
 
 - frontend: <http://localhost:5173>
+
+O frontend usa `VITE_API_URL` (padrão: `http://localhost:8000/api/v1`). Entre com uma conta existente da API. O token é mantido no armazenamento local do navegador e validado em `/auth/me` ao recarregar; “Sair” ou uma resposta 401 remove a sessão. As rotas `/admin` e `/user` exigem o perfil correspondente.
 - API: <http://localhost:8000/api/v1/health>
 - OpenAPI: <http://localhost:8000/docs>
 - PostgreSQL: `localhost:5432`
