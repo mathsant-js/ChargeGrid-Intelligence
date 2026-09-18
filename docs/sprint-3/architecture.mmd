@@ -1,0 +1,14 @@
+flowchart LR
+  B[Navegador React] -->|HTTP /api/v1| A[API REST FastAPI]
+  A --> S[Serviço de sessões]
+  A --> C[Controlador de simulação: tick manual]
+  A --> N[Analytics e dashboards]
+  S --> E[Billing simulado]
+  C --> P[Alocador de energia]
+  D[Provedor solar simulado] --> C
+  S --> O[SQLAlchemy]
+  C --> O
+  E --> O
+  N --> O
+  O --> DB[(PostgreSQL)]
+  N -->|resposta da API| A

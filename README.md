@@ -64,6 +64,18 @@ make check
 
 O alvo executa testes, lint e verificação de tipos no backend e no frontend, além do build web. Consulte [CONTRIBUTING.md](docs/CONTRIBUTING.md) para o fluxo detalhado.
 
+## Demo da Sprint 3
+
+Execute o [roteiro reproduzível da Sprint 3](docs/sprint-3/README.md) em um banco isolado. Ele inclui comandos de seed, configuração UTC, cenário por endpoints públicos e resultados esperados.
+
+Após configurar `.env` e exportar `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` conforme o roteiro:
+
+```bash
+docker compose up --build -d
+docker compose exec -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python -m app.demo_seed
+python3 scripts/sprint3_demo.py
+```
+
 ## Documentação
 
 - [Briefing](BRIEFING.md)
@@ -132,5 +144,4 @@ limites em [docs/PHASE_6.md](docs/PHASE_6.md).
 A Fase 6 ainda não está concluída: o KPI obrigatório de risco de pico depende
 de uma previsão futura válida, e o fluxo automático de previsão/classificação
 da Fase 7 ainda não existe. Sem esses dados, a tela mostra um estado
-informativo. O simulador também depende de ticks manuais pela API; não há
-seed reproduzível oficial para a demonstração completa.
+informativo. O simulador também depende de ticks manuais pela API; a Sprint 3 fornece seed e roteiro reproduzíveis para a demonstração completa.

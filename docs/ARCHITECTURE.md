@@ -1,61 +1,7 @@
-# Arquitetura
+# Arquitetura executada
 
-O ChargeGrid Intelligence é um monólito modular composto por três processos em desenvolvimento:
+O ChargeGrid Intelligence é um monólito modular. O navegador React consome a API REST FastAPI sob `/api/v1`; os serviços usam SQLAlchemy e PostgreSQL. Os contratos HTTP são Pydantic. Consulte os [diagramas da Sprint 3](sprint-3/README.md) para as conexões do fluxo de demonstração.
 
-```text
-Browser → React/Vite → FastAPI → PostgreSQL
-```
+O serviço `charging_sessions` valida início e encerramento, captura tarifa e cria invoice simulada. O controlador em `simulation/control.py` executa apenas ticks manuais por `POST /simulation/ticks`. O provedor `SimulationEnergyDataProvider` calcula geração solar simulada pela curva UTC; o alocador `EqualSharePowerResolver` aplica limites individuais e de rede e prioriza solar. `simulation/tick.py` persiste leituras, acumuladores e alertas na mesma transação. Analytics e dashboards consultam dados persistidos pela API. O navegador não calcula as regras de energia.
 
-O backend separa transporte HTTP (`api`), configuração transversal (`core`), acesso
-ao banco (`db`), persistência (`models`), contratos (`schemas`) e regras de domínio
-(`services`). Os pacotes `repositories`, `simulation`, `analytics` e `ml` já reservam
-as fronteiras previstas no `SPEC.md`, mas ainda não possuem implementação funcional.
-Todos os módulos compartilham um único processo e um único banco.
-
-## Fronteiras
-
-- Rotas usam schemas Pydantic para validar HTTP e, no estado atual, executam CRUD e
-  consultas simples diretamente pela `Session` do SQLAlchemy.
-- O serviço `services/charging_sessions.py` concentra as regras existentes de início
-  e encerramento da sessão: usuário ativo, propriedade do veículo, disponibilidade
-  do carregador, exclusividade de sessão ativa, potência solicitada, cálculo final,
-  invoice e alerta.
-- `api/routes/common.py` centraliza a injeção da sessão de banco, busca com resposta
-  404 e commit com conversão de conflito de integridade para HTTP 409.
-- O pacote `repositories` está vazio. Repositórios serão adicionados quando consultas
-  repetidas ou complexas exigirem essa separação; não são uma camada ativa hoje.
-- Modelos representam persistência; schemas representam contratos da API.
-- `simulation` será uma fonte de dados substituível, não o proprietário do domínio.
-- `analytics` e `ml` ainda serão implementados; ML permanecerá consultivo e nunca
-  substituirá restrições energéticas determinísticas.
-
-## Fluxo implementado de sessão
-
-```text
-HTTP /api/v1/sessions
-        ↓
-schemas Pydantic + carregamento das entidades
-        ↓
-serviço de sessões (regras e alterações da transação)
-        ↓
-commit na rota
-        ↓
-SQLAlchemy models → PostgreSQL
-```
-
-As demais rotas seguem, por enquanto, o fluxo direto
-`rota → Session SQLAlchemy → models → PostgreSQL`. Regras novas não devem ser
-acrescentadas a esse fluxo: quando houver regra de negócio, ela deve ser movida para
-um serviço testável.
-
-## Decisões da fundação
-
-- Todo endpoint público usa `/api/v1`.
-- Configuração e segredos chegam por variáveis de ambiente.
-- Alterações de schema são versionadas por Alembic.
-- PostgreSQL 16 é o banco de desenvolvimento e produção do MVP.
-- O frontend consome a URL configurável `VITE_API_URL`.
-- Datas são armazenadas em UTC, IDs usam UUID e valores monetários usam tipos
-  decimais.
-
-Consulte `SPEC.md` para regras funcionais e precedência de requisitos.
+A previsão de demanda e a classificação de risco ainda não são produzidas automaticamente. Não há integração física, agendador de ticks ou comandos para carregadores. O pacote `repositories` permanece reservado, sem camada ativa. Todas as alterações de esquema usam Alembic; datas são UTC, IDs são UUID e valores monetários usam tipos decimais.
