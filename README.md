@@ -69,13 +69,14 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
 - [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
 - [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
-- [Fase 5 — Billing e histórico de invoices](docs/PHASE_5.md)
+- [Fase 5 — Billing e histórico de invoices (concluída)](docs/PHASE_5.md)
 
 ## Estado atual
 
-As Fases 1 (fundação), 2 (domínio), 3 (simulação e leituras) e 4 (gestão energética)
-estão concluídas, com critérios de saída e evidências documentados. As migrations
-da Fase 3 foram validadas online em PostgreSQL. O backend entrega
+As Fases 1 (fundação), 2 (domínio), 3 (simulação e leituras), 4 (gestão
+energética) e 5 (billing e histórico de invoices) estão concluídas, com
+critérios de saída e evidências documentados. As migrations das Fases 3 e 5
+foram validadas online em PostgreSQL. O backend entrega
 Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
 autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
@@ -101,3 +102,10 @@ duplicatas mesmo em escrita concorrente, e uma falha desfaz todo o tick. O
 relógio avança apenas depois do commit. O chamador deve passar uma sessão de
 banco sem transação ativa e um relógio iniciado; em caso de erro pode repetir
 o mesmo tick após corrigir a causa.
+
+Na Fase 5, a sessão captura a tarifa ativa válida no início. Ao encerrar, o
+backend calcula o custo Pay-per-Use, cria uma invoice `CLOSED` e registra um
+alerta na mesma transação. O histórico de invoices está disponível em
+`GET /api/v1/billing/invoices` e `GET /api/v1/billing/invoices/{invoice_id}`,
+com acesso restrito às próprias invoices para usuários comuns. Consulte
+[a validação da Fase 5](docs/PHASE_5.md) para os critérios de aceite e testes.

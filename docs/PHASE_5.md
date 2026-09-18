@@ -1,5 +1,7 @@
 # Fase 5 — Billing e histórico de invoices
 
+**Status: concluída.**
+
 ## Escopo e critérios
 
 Revisão final feita contra `SPEC.md` (tarifa, invoice, cobrança Pay-per-Use,
