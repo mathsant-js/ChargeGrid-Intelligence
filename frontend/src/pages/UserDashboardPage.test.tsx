@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { App } from '../App'
@@ -24,13 +24,16 @@ it('shows the active estimate, completed invoice amount and histories', async ()
 
 it('shows loading, empty and retry states', async () => {
   let calls = 0
+  let resolveFirstDashboard!: (response: Response) => void
+  const firstDashboard = new Promise<Response>(resolve => { resolveFirstDashboard = resolve })
   vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
     if (String(input).endsWith('/auth/me')) return json(user)
     calls++
-    return calls === 1 ? json({}, 500) : json({ current_session: null, session_history: [], invoices: [] })
+    return calls === 1 ? firstDashboard : json({ current_session: null, session_history: [], invoices: [] })
   })
   show()
   expect(await screen.findByText('Carregando dashboard...')).toBeInTheDocument()
+  await act(async () => { resolveFirstDashboard(json({}, 500)) })
   expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar o dashboard.')
   fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
   expect(await screen.findByText('Nenhuma recarga em andamento.')).toBeInTheDocument()
