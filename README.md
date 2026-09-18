@@ -94,7 +94,10 @@ A potência solar disponível cobre primeiro a demanda alocada e é rateada
 proporcionalmente; a parcela restante vem da rede, limitada por estação.
 Cada tick corresponde à duração configurada do relógio (60 segundos simulados
 por padrão), calcula energia em kWh e atualiza os acumuladores das sessões.
-Esta etapa ainda não gera alertas nem atualiza analytics derivados por tick.
+O tick também cria `HIGH_DEMAND` quando a importação da rede atinge o limiar
+configurado em `SystemConfiguration` (0,85 na ausência de configuração). O
+alerta é emitido uma vez por episódio de alta demanda e participa da mesma
+transação das leituras. O tick ainda não atualiza analytics derivados.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
@@ -110,3 +113,4 @@ alerta na mesma transação. O histórico de invoices está disponível em
 `GET /api/v1/billing/invoices` e `GET /api/v1/billing/invoices/{invoice_id}`,
 com acesso restrito às próprias invoices para usuários comuns. Consulte
 [a validação da Fase 5](docs/PHASE_5.md) para os critérios de aceite e testes.
+Listagem e reconhecimento de alertas em `/api/v1/alerts` exigem papel ADMIN.

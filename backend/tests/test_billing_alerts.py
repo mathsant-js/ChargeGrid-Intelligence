@@ -9,13 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.models.alert import Alert
+from app.models.alert import Alert, AlertSeverity, AlertType
 from app.models.billing import Invoice, Tariff
 from app.models.energy import ChargingSession, ChargingSessionStatus
-from app.models.infrastructure import Charger, ChargerStatus
+from app.models.infrastructure import Charger, ChargerStatus, ChargingStation
 from app.models.user import User, UserRole
 from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD
-from tests.test_auth_authorization import login_headers
+from tests.test_auth_authorization import add_user, login_headers
 from tests.test_charging_session_domain import (
     create_charger,
     create_user_and_headers,
@@ -23,6 +23,38 @@ from tests.test_charging_session_domain import (
     start_session,
 )
 from tests.test_energy import create_session_dependencies
+
+
+@pytest.mark.anyio
+async def test_alert_list_and_acknowledgement_require_admin(
+    client: AsyncClient, db_session: Session
+) -> None:
+    station = ChargingStation(name="Alert station", grid_limit_kw=20, station_peak_solar_kw=10)
+    db_session.add(station)
+    db_session.flush()
+    alert = Alert(
+        station_id=station.id,
+        type=AlertType.HIGH_DEMAND,
+        severity=AlertSeverity.WARNING,
+        title="High demand",
+        message="Grid import reached the configured threshold.",
+    )
+    db_session.add(alert)
+    db_session.commit()
+    user = add_user(db_session, email="alert-user@example.com")
+    user_headers = await login_headers(client, user.email)
+    admin_headers = dict(client.headers)
+    client.headers.pop("Authorization")
+    for method, path in (
+        (client.get, "/api/v1/alerts"),
+        (client.patch, f"/api/v1/alerts/{alert.id}/acknowledge"),
+    ):
+        assert (await method(path)).status_code == 401
+        assert (await method(path, headers=user_headers)).status_code == 403
+    assert (await client.get("/api/v1/alerts", headers=admin_headers)).status_code == 200
+    assert (
+        await client.patch(f"/api/v1/alerts/{alert.id}/acknowledge", headers=admin_headers)
+    ).status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -139,8 +171,10 @@ async def test_tariff_crud_keeps_only_latest_active(client: AsyncClient) -> None
 @pytest.mark.anyio
 async def test_only_admin_can_change_tariffs(client: AsyncClient, db_session: Session) -> None:
     user = User(
-        name="Driver", email="tariff-driver@example.com",
-        password_hash=hash_password("secret123"), role=UserRole.USER,
+        name="Driver",
+        email="tariff-driver@example.com",
+        password_hash=hash_password("secret123"),
+        role=UserRole.USER,
     )
     db_session.add(user)
     db_session.commit()
@@ -148,13 +182,15 @@ async def test_only_admin_can_change_tariffs(client: AsyncClient, db_session: Se
     tariff = db_session.query(Tariff).first()
     assert tariff is not None
     payload = {
-        "name": "Unauthorized", "price_per_kwh": "0.0100",
+        "name": "Unauthorized",
+        "price_per_kwh": "0.0100",
         "valid_from": "2020-01-01T00:00:00Z",
     }
     assert (await client.post("/api/v1/tariffs", headers=headers, json=payload)).status_code == 403
     assert (
         await client.patch(
-            f"/api/v1/tariffs/{tariff.id}", headers=headers,
+            f"/api/v1/tariffs/{tariff.id}",
+            headers=headers,
             json={"price_per_kwh": "0.0100"},
         )
     ).status_code == 403
@@ -173,8 +209,11 @@ async def test_database_rejects_two_active_tariffs(
 ) -> None:
     db_session.add(
         Tariff(
-            name="Duplicate", price_per_kwh=Decimal("1.0000"), currency="BRL",
-            is_active=True, valid_from=datetime(2020, 1, 1, tzinfo=UTC),
+            name="Duplicate",
+            price_per_kwh=Decimal("1.0000"),
+            currency="BRL",
+            is_active=True,
+            valid_from=datetime(2020, 1, 1, tzinfo=UTC),
         )
     )
     with pytest.raises(IntegrityError):
@@ -193,9 +232,11 @@ async def test_tariff_switch_respects_validity_and_preserves_session_price(
     assert first.status_code == 201
     admin_headers = await login_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
     future = await client.post(
-        "/api/v1/tariffs", headers=admin_headers,
+        "/api/v1/tariffs",
+        headers=admin_headers,
         json={
-            "name": "Future", "price_per_kwh": "1.5000",
+            "name": "Future",
+            "price_per_kwh": "1.5000",
             "valid_from": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
         },
     )
@@ -204,7 +245,8 @@ async def test_tariff_switch_respects_validity_and_preserves_session_price(
     second_charger = await create_charger(client, suffix="tariff-switch-b")
     assert (await start_session(client, headers, second_vehicle, second_charger)).status_code == 409
     activated = await client.patch(
-        f"/api/v1/tariffs/{future.json()['id']}", headers=admin_headers,
+        f"/api/v1/tariffs/{future.json()['id']}",
+        headers=admin_headers,
         json={"valid_from": (datetime.now(UTC) - timedelta(minutes=1)).isoformat()},
     )
     assert activated.status_code == 200
@@ -226,6 +268,7 @@ async def test_tariff_switch_respects_validity_and_preserves_session_price(
 async def test_stopping_session_creates_closed_invoice_and_alert(
     client: AsyncClient, db_session: Session
 ) -> None:
+    admin_headers = dict(client.headers)
     user, vehicle, station, charger = await create_session_dependencies(client)
     started = await client.post(
         "/api/v1/sessions/start",
@@ -252,15 +295,25 @@ async def test_stopping_session_creates_closed_invoice_and_alert(
     assert invoices[0]["closed_at"] is not None
     assert (await client.get(f"/api/v1/billing/invoices/{invoices[0]['id']}")).status_code == 200
 
-    alerts = (await client.get(
-        "/api/v1/alerts", params={"station_id": station["id"], "acknowledged": "false"}
-    )).json()
+    alerts = (
+        await client.get(
+            "/api/v1/alerts",
+            params={"station_id": station["id"], "acknowledged": "false"},
+            headers=admin_headers,
+        )
+    ).json()
     assert len(alerts) == 1
     assert alerts[0]["type"] == "SESSION_FINISHED"
     assert alerts[0]["severity"] == "INFO"
-    acknowledged = await client.patch(f"/api/v1/alerts/{alerts[0]['id']}/acknowledge")
+    acknowledged = await client.patch(
+        f"/api/v1/alerts/{alerts[0]['id']}/acknowledge", headers=admin_headers
+    )
     assert acknowledged.status_code == 200
     assert acknowledged.json()["acknowledged_at"] is not None
-    again = await client.patch(f"/api/v1/alerts/{alerts[0]['id']}/acknowledge")
+    again = await client.patch(
+        f"/api/v1/alerts/{alerts[0]['id']}/acknowledge", headers=admin_headers
+    )
     assert again.json()["acknowledged_at"] == acknowledged.json()["acknowledged_at"]
-    assert (await client.get("/api/v1/alerts", params={"acknowledged": "false"})).json() == []
+    assert (
+        await client.get("/api/v1/alerts", params={"acknowledged": "false"}, headers=admin_headers)
+    ).json() == []
