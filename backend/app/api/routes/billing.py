@@ -5,8 +5,16 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select, update
 
-from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
+from app.api.dependencies import AdminUser, CurrentUser
+from app.api.routes.common import (
+    NOT_FOUND_RESPONSE,
+    UNAUTHORIZED_RESPONSE,
+    DbSession,
+    commit_or_conflict,
+    get_or_404,
+)
 from app.models.billing import Invoice, InvoiceStatus, Tariff
+from app.models.user import UserRole
 from app.schemas.billing import InvoiceResponse, TariffCreate, TariffResponse, TariffUpdate
 
 router = APIRouter(tags=["billing"])
@@ -29,12 +37,12 @@ async def list_tariffs(db: DbSession) -> list[Tariff]:
 
 
 @router.post("/tariffs", response_model=TariffResponse, status_code=status.HTTP_201_CREATED)
-async def create_tariff(payload: TariffCreate, db: DbSession) -> Tariff:
+async def create_tariff(payload: TariffCreate, db: DbSession, _admin: AdminUser) -> Tariff:
     tariff = Tariff(**payload.model_dump())
     if tariff.is_active:
         deactivate_other_tariffs(db)
     db.add(tariff)
-    commit_or_conflict(db)
+    commit_or_conflict(db, {"uq_tariffs_one_active": "Only one tariff can be active"})
     db.refresh(tariff)
     return tariff
 
@@ -45,7 +53,9 @@ async def get_tariff(tariff_id: UUID, db: DbSession) -> Tariff:
 
 
 @router.patch("/tariffs/{tariff_id}", response_model=TariffResponse)
-async def update_tariff(payload: TariffUpdate, tariff_id: UUID, db: DbSession) -> Tariff:
+async def update_tariff(
+    payload: TariffUpdate, tariff_id: UUID, db: DbSession, _admin: AdminUser
+) -> Tariff:
     tariff = get_or_404(db, Tariff, tariff_id)
     changes = payload.model_dump(exclude_unset=True)
     valid_from = changes.get("valid_from", tariff.valid_from)
@@ -56,18 +66,27 @@ async def update_tariff(payload: TariffUpdate, tariff_id: UUID, db: DbSession) -
         deactivate_other_tariffs(db, tariff.id)
     for field, value in changes.items():
         setattr(tariff, field, value)
-    commit_or_conflict(db)
+    commit_or_conflict(db, {"uq_tariffs_one_active": "Only one tariff can be active"})
     db.refresh(tariff)
     return tariff
 
 
-@router.get("/billing/invoices", response_model=list[InvoiceResponse])
+@router.get(
+    "/billing/invoices",
+    response_model=list[InvoiceResponse],
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
 async def list_invoices(
     db: DbSession,
+    current_user: CurrentUser,
     user_id: UUID | None = None,
     invoice_status: Annotated[InvoiceStatus | None, Query(alias="status")] = None,
 ) -> list[Invoice]:
     statement = select(Invoice)
+    if current_user.role != UserRole.ADMIN:
+        if user_id is not None and user_id != current_user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
+        statement = statement.where(Invoice.user_id == current_user.id)
     if user_id is not None:
         statement = statement.where(Invoice.user_id == user_id)
     if invoice_status is not None:
@@ -75,6 +94,13 @@ async def list_invoices(
     return list(db.scalars(statement.order_by(Invoice.created_at, Invoice.id)).all())
 
 
-@router.get("/billing/invoices/{invoice_id}", response_model=InvoiceResponse)
-async def get_invoice(invoice_id: UUID, db: DbSession) -> Invoice:
-    return get_or_404(db, Invoice, invoice_id)
+@router.get(
+    "/billing/invoices/{invoice_id}",
+    response_model=InvoiceResponse,
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
+async def get_invoice(invoice_id: UUID, db: DbSession, current_user: CurrentUser) -> Invoice:
+    invoice = get_or_404(db, Invoice, invoice_id)
+    if current_user.role != UserRole.ADMIN and invoice.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
+    return invoice

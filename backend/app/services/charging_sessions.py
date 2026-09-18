@@ -10,6 +10,7 @@ from app.models.energy import ChargingSession, ChargingSessionStatus
 from app.models.infrastructure import Charger, ChargerStatus
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.services.billing import calculate_pay_per_use_total
 from app.services.errors import DomainConflictError, DomainResourceNotFoundError
 
 ACTIVE_SESSION_STATUSES = (
@@ -94,6 +95,7 @@ def start_charging_session(
             Tariff.valid_from <= started_at,
             or_(Tariff.valid_until.is_(None), Tariff.valid_until > started_at),
         )
+        .order_by(Tariff.valid_from.desc(), Tariff.created_at.desc(), Tariff.id.desc())
     )
     if tariff is None:
         raise DomainConflictError("No active tariff is valid for the session start time")
@@ -123,8 +125,8 @@ def stop_charging_session(db: Session, session: ChargingSession, charger: Charge
     closed_at = datetime.now(UTC)
     session.ended_at = closed_at
     session.allocated_power_kw = 0
-    subtotal = (Decimal(str(session.energy_consumed_kwh)) * session.tariff_per_kwh).quantize(
-        Decimal("0.01")
+    subtotal = calculate_pay_per_use_total(
+        session.energy_consumed_kwh, session.tariff_per_kwh
     )
     session.total_cost = subtotal
     charger.status = ChargerStatus.AVAILABLE

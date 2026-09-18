@@ -3,7 +3,18 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,6 +32,10 @@ class Tariff(Base):
         CheckConstraint("price_per_kwh >= 0", name="ck_tariffs_price_nonnegative"),
         CheckConstraint(
             "valid_until IS NULL OR valid_until > valid_from", name="ck_tariffs_valid_period"
+        ),
+        Index(
+            "uq_tariffs_one_active", "is_active", unique=True,
+            postgresql_where=text("is_active"), sqlite_where=text("is_active = 1"),
         ),
     )
 
