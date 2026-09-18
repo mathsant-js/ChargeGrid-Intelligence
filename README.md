@@ -23,6 +23,7 @@ Serviços:
 O frontend usa `VITE_API_URL` (padrão: `http://localhost:8000/api/v1`). Entre com uma conta existente da API. O token é mantido no armazenamento local do navegador e validado em `/auth/me` ao recarregar; “Sair” ou uma resposta 401 remove a sessão. As rotas `/admin` e `/user` exigem o perfil correspondente.
 
 Em `/admin`, o gestor pode filtrar o dashboard por estação e período, consultar indicadores, gráficos, histórico e alertas, e reconhecer alertas pela API. A previsão e o risco de pico aparecem somente para uma estação com previsão futura válida; na ausência de dados de ML, a tela mostra um estado informativo.
+Em `/user`, o usuário consulta a recarga atual, o histórico de sessões e as invoices. O custo durante a recarga é uma estimativa; o valor fechado vem da invoice. Os dados são limitados ao usuário autenticado pela API.
 - API: <http://localhost:8000/api/v1/health>
 - OpenAPI: <http://localhost:8000/docs>
 - PostgreSQL: `localhost:5432`

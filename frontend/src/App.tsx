@@ -3,7 +3,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/context'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { LoginPage } from './pages/LoginPage'
-import { WorkspacePage } from './pages/WorkspacePage'
+import { UserDashboardPage } from './pages/UserDashboardPage'
 import { AppShell } from './layouts/AppShell'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 
@@ -17,7 +17,7 @@ export function App() {
     <Route path="/" element={<Home />} />
     <Route path="/login" element={<LoginPage />} />
     <Route element={<ProtectedRoute role="ADMIN" />}><Route path="/admin" element={<AdminDashboardPage />} /></Route>
-    <Route element={<ProtectedRoute role="USER" />}><Route path="/user" element={<WorkspacePage role="USER" />} /></Route>
+    <Route element={<ProtectedRoute role="USER" />}><Route path="/user" element={<UserDashboardPage />} /></Route>
     <Route path="/forbidden" element={<AppShell><section className="panel"><h1>Acesso não permitido</h1><p>Seu perfil não tem acesso a esta área.</p><a href="/">Voltar</a></section></AppShell>} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></AuthProvider>

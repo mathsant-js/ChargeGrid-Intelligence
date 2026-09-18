@@ -12,19 +12,19 @@ beforeEach(() => localStorage.clear())
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('authentication flow', () => {
-  it('logs in and shows the user workspace with an empty state', async () => {
+  it('logs in and shows the user dashboard with an empty state', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const path = String(input)
       if (path.endsWith('/auth/login')) return json({ access_token: 'token', token_type: 'bearer' })
       if (path.endsWith('/auth/me')) return json(user)
-      if (path.endsWith('/sessions')) return json([])
+      if (path.endsWith('/user/dashboard')) return json({ current_session: null, session_history: [], invoices: [] })
       throw Error(path)
     })
     show('/login')
     fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: user.email } })
     fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
-    expect(await screen.findByText('Nenhuma sessão encontrada.')).toBeInTheDocument()
+    expect(await screen.findByText('Nenhuma recarga em andamento.')).toBeInTheDocument()
     expect(tokenStore.get()).toBe('token')
     expect(new Headers(fetch.mock.calls.find(([url]) => String(url).endsWith('/auth/me'))?.[1]?.headers).get('Authorization')).toBe('Bearer token')
   })
@@ -54,17 +54,17 @@ describe('authentication flow', () => {
     expect(tokenStore.get()).toBeNull()
   })
 
-  it('shows and retries a session loading error', async () => {
+  it('shows and retries a dashboard loading error', async () => {
     tokenStore.set('saved')
     let attempts = 0
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       if (String(input).endsWith('/auth/me')) return json(user)
       attempts += 1
-      return attempts === 1 ? json({ detail: 'error' }, 500) : json([])
+      return attempts === 1 ? json({ detail: 'error' }, 500) : json({ current_session: null, session_history: [], invoices: [] })
     })
     show('/user')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar as sessões.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar o dashboard.')
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
-    await waitFor(() => expect(screen.getByText('Nenhuma sessão encontrada.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Nenhuma recarga em andamento.')).toBeInTheDocument())
   })
 })

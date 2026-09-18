@@ -7,6 +7,8 @@ export interface TokenResponse { access_token: string; token_type: 'bearer' }
 export interface ChargingSession { id: string; user_id: string; vehicle_id: string; charger_id: string; status: 'CREATED' | 'CHARGING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED'; started_at: string | null; ended_at: string | null; requested_power_kw: number; allocated_power_kw: number; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; tariff_per_kwh: string; total_cost: string; created_at: string; updated_at: string }
 export interface EnergyReading { id: string; session_id: string; timestamp: string; requested_power_kw: number; allocated_power_kw: number; solar_power_kw: number; grid_power_kw: number; interval_energy_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number }
 export interface Invoice { id: string; session_id: string; user_id: string; energy_kwh: string; tariff_per_kwh: string; subtotal: string; total: string; status: 'OPEN' | 'CLOSED' | 'CANCELLED'; created_at: string; closed_at: string | null }
+export interface UserSessionSummary { id: string; status: ChargingSession['status']; vehicle_name: string; charger_name: string; started_at: string | null; ended_at: string | null; duration_seconds: number; allocated_power_kw: number; energy_consumed_kwh: number; solar_percentage: number; estimated_cost: string | null; invoice_total: string | null }
+export interface UserDashboard { current_session: UserSessionSummary | null; session_history: UserSessionSummary[]; invoices: Invoice[] }
 export interface Dashboard { station_id: string | null; user_id: string | null; session_count: number; completed_session_count: number; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; billed_total: string; currency: string }
 export interface Sustainability { station_id: string | null; user_id: string | null; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; solar_percentage: number; avoided_co2_kg: number; grid_emission_factor_kg_per_kwh: number; estimated_solar_savings: string; currency: string }
 export interface Filters { station_id?: string; user_id?: string; from?: string; to?: string }
@@ -53,6 +55,7 @@ export const api = {
   login: (email: string, password: string) => request<TokenResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }, false),
   me: () => request<User>('/auth/me'),
   sessions: () => request<ChargingSession[]>('/sessions'),
+  userDashboard: () => request<UserDashboard>('/user/dashboard'),
   session: (id: string) => request<ChargingSession>(`/sessions/${encodeURIComponent(id)}`),
   startSession: (vehicle_id: string, charger_id: string) => request<ChargingSession>('/sessions/start', { method: 'POST', body: JSON.stringify({ vehicle_id, charger_id }) }),
   stopSession: (id: string) => request<ChargingSession>(`/sessions/${encodeURIComponent(id)}/stop`, { method: 'POST' }),

@@ -80,6 +80,7 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 760px) { .panel { margin: 2rem 1rem; } }
 .dashboard { max-width: 1200px; margin: 0 auto; padding: 2rem; }
 .dashboard-heading, .dashboard-filters { display: flex; align-items: end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.dashboard-actions { display: flex; gap: .6rem; }
 .dashboard-heading h1 { font-size: clamp(2rem, 4vw, 3.5rem); margin: .4rem 0; }
 .dashboard-heading p:last-child { color: #a9c7ba; }
 .dashboard-filters { justify-content: start; margin: 2rem 0; }
