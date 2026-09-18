@@ -58,11 +58,11 @@ describe('authentication flow', () => {
     tokenStore.set('saved')
     let attempts = 0
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
-      if (String(input).endsWith('/auth/me')) return json({ ...user, role: 'ADMIN' })
+      if (String(input).endsWith('/auth/me')) return json(user)
       attempts += 1
       return attempts === 1 ? json({ detail: 'error' }, 500) : json([])
     })
-    show('/admin')
+    show('/user')
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar as sessões.')
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
     await waitFor(() => expect(screen.getByText('Nenhuma sessão encontrada.')).toBeInTheDocument())

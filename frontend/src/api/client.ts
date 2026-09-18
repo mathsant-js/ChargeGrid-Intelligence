@@ -10,6 +10,11 @@ export interface Invoice { id: string; session_id: string; user_id: string; ener
 export interface Dashboard { station_id: string | null; user_id: string | null; session_count: number; completed_session_count: number; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; billed_total: string; currency: string }
 export interface Sustainability { station_id: string | null; user_id: string | null; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; solar_percentage: number; avoided_co2_kg: number; grid_emission_factor_kg_per_kwh: number; estimated_solar_savings: string; currency: string }
 export interface Filters { station_id?: string; user_id?: string; from?: string; to?: string }
+export interface Station { id: string; name: string; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
+export interface Charger { id: string; station_id: string; name: string; status: 'AVAILABLE' | 'CHARGING' | 'UNAVAILABLE'; is_active: boolean }
+export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }
+export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string }
+export interface Alert { id: string; station_id: string; type: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; title: string; message: string; created_at: string; acknowledged_at: string | null }
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); this.name = 'ApiError' }
@@ -57,6 +62,12 @@ export const api = {
   invoice: (id: string) => request<Invoice>(`/billing/invoices/${encodeURIComponent(id)}`),
   dashboard: (filters?: Filters) => request<Dashboard>(`/analytics/dashboard${query(filters)}`),
   sustainability: (filters?: Filters) => request<Sustainability>(`/analytics/sustainability${query(filters)}`),
+  stations: () => request<Station[]>('/stations'),
+  chargers: () => request<Charger[]>('/chargers'),
+  solarHistory: (filters?: Filters) => request<SolarReading[]>(`/solar/history${query(filters)}`),
+  prediction: (station_id: string) => request<DemandPrediction>(`/predictions/demand${query({ station_id })}`),
+  alerts: (station_id?: string) => request<Alert[]>(`/alerts${query({ station_id })}`),
+  acknowledgeAlert: (id: string) => request<Alert>(`/alerts/${encodeURIComponent(id)}/acknowledge`, { method: 'PATCH' }),
 }
 
 export interface HealthResponse { status: 'ok' }
