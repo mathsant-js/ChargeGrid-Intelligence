@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
     app_cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     api_v1_prefix: str = "/api/v1"
+    grid_emission_factor_kg_per_kwh: float = Field(default=0.0, ge=0)
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"
     jwt_secret_key: str = Field(default=DEFAULT_JWT_SECRET, min_length=32)
     jwt_expiration_minutes: int = Field(default=60, gt=0)

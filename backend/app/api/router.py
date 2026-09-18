@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes.alerts import router as alerts_router
+from app.api.routes.analytics import router as analytics_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.chargers import router as chargers_router
@@ -27,5 +28,6 @@ api_router.include_router(energy_router)
 api_router.include_router(solar_router)
 api_router.include_router(billing_router)
 api_router.include_router(alerts_router)
+api_router.include_router(analytics_router)
 api_router.include_router(predictions_router)
 api_router.include_router(configuration_router)
