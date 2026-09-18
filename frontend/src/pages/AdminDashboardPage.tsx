@@ -4,6 +4,7 @@ import { api, ApiError, type Alert, type Charger, type ChargingSession, type Das
 import { useAuth } from '../auth/context'
 import { DashboardCard } from '../components/DashboardCard'
 import { AppShell } from '../layouts/AppShell'
+import { aggregateEnergyHistory } from './energyHistory'
 
 type Data = { stations: Station[]; chargers: Charger[]; sessions: ChargingSession[]; invoices: Invoice[]; readings: EnergyReading[]; currentReadings: EnergyReading[]; solar: SolarReading[]; summary: Dashboard; sustainability: Sustainability; alerts: Alert[]; prediction: DemandPrediction | null; predictionError: boolean }
 const number = (value: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)
@@ -65,7 +66,7 @@ export function AdminDashboardPage() {
   const solarAvailable = [...currentSolar.values()].reduce((total, reading) => total + reading.available_power_kw, 0)
   const predictionStation = stationId || (data?.stations.length === 1 ? data.stations[0].id : '')
   const prediction = data?.prediction && validPrediction(data.prediction, predictionStation) ? data.prediction : null
-  const history = (data?.readings ?? []).map(reading => ({ label: time(reading.timestamp), demand: reading.allocated_power_kw, solar: reading.solar_power_kw, grid: reading.grid_power_kw }))
+  const history = aggregateEnergyHistory(data?.readings ?? []).map(point => ({ ...point, label: time(point.timestamp) }))
   const periodStart = period === '24h' ? Date.now() - 86400000 : period === '7d' ? Date.now() - 7 * 86400000 : 0
   const shownSessionIds = new Set(shownSessions.map(session => session.id))
   const invoiceHistory = (data?.invoices ?? []).filter(invoice => shownSessionIds.has(invoice.session_id) && invoice.closed_at && Date.parse(invoice.closed_at) >= periodStart).map(invoice => ({ label: invoice.closed_at ? time(invoice.closed_at) : '—', total: Number(invoice.total) }))

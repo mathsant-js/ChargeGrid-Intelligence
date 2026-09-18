@@ -76,6 +76,7 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 - [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
 - [Fase 5 — Billing e histórico de invoices (concluída)](docs/PHASE_5.md)
 - [Fase 6 — Contratos da API de analytics](docs/PHASE_6_ANALYTICS.md)
+- [Fase 6 — Integração e limites](docs/PHASE_6.md)
 
 ## Estado atual
 
@@ -119,3 +120,17 @@ alerta na mesma transação. O histórico de invoices está disponível em
 com acesso restrito às próprias invoices para usuários comuns. Consulte
 [a validação da Fase 5](docs/PHASE_5.md) para os critérios de aceite e testes.
 Listagem e reconhecimento de alertas em `/api/v1/alerts` exigem papel ADMIN.
+
+A integração da Fase 6 cobre os dashboards administrativo e do usuário, os
+gráficos de demanda/solar/rede e faturamento, alertas e os indicadores de
+sustentabilidade. Um teste integrado percorre início de sessões, três ticks,
+redistribuição de potência, prioridade solar, alerta, encerramento, invoice e
+atualização das respostas dos dashboards. Os gráficos do gestor somam leituras
+simultâneas para mostrar a demanda total de cada tick. Veja os resultados e
+limites em [docs/PHASE_6.md](docs/PHASE_6.md).
+
+A Fase 6 ainda não está concluída: o KPI obrigatório de risco de pico depende
+de uma previsão futura válida, e o fluxo automático de previsão/classificação
+da Fase 7 ainda não existe. Sem esses dados, a tela mostra um estado
+informativo. O simulador também depende de ticks manuais pela API; não há
+seed reproduzível oficial para a demonstração completa.
