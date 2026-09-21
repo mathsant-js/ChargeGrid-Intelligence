@@ -1,0 +1,191 @@
+1
+00:00:00,250 --> 00:00:07,890
+Olá! Somos a Equipe 3 e este é o ChargeGrid Intelligence, desenvolvido para o desafio FIAP em parceria com a GoodWe.
+
+2
+00:00:08,350 --> 00:00:15,110
+Nesta Sprint 3 entregamos um protótipo integrado para gerenciar recargas de veículos elétricos,
+
+3
+00:00:15,350 --> 00:00:22,970
+controlar a demanda da rede, priorizar a energia solar e transformar os dados da operação em alertas,
+
+4
+00:00:23,390 --> 00:00:26,150
+cobrança e indicadores ambientais.
+
+5
+00:00:26,150 --> 00:00:35,590
+No diagrama da arquitetura do projeto, nós podemos ver que a arquitetura segue um monolito
+
+6
+00:00:35,590 --> 00:00:36,150
+modular.
+
+7
+00:00:36,610 --> 00:00:42,050
+O front-end foi desenvolvido em React e TypeScript e consome a API FastAPI.
+
+8
+00:00:42,630 --> 00:00:48,870
+No back-end, o serviço de sessão, energia, simulação, billing e analytics concentram
+
+9
+00:00:48,870 --> 00:00:53,510
+as regras de negócio, enquanto o PostgreSQL mantém o histórico da operação.
+
+10
+00:00:53,510 --> 00:01:00,110
+Nesta entrega, os carregadores e a geração solar são simulados. Cada minuto da operação
+
+11
+00:01:00,110 --> 00:01:06,750
+é avançado por um tick manual, permitindo reproduzir o cenário de forma determinística.
+
+12
+00:01:07,250 --> 00:01:15,350
+Iniciamos o cenário com 3 veículos. Cada um solicita 20 kW. Como a demanda total é
+
+13
+00:01:15,350 --> 00:01:22,170
+de 60 kW e esse também é o limite da rede, cada sessão recebe integralmente os
+
+14
+00:01:22,170 --> 00:01:29,050
+20 kW solicitados. Nesse primeiro momento, não há geração solar, então toda a energia
+
+15
+00:01:29,050 --> 00:01:38,080
+utilizada vem da rede elétrica. Em seguida, inicia-se uma quarta recarga também
+
+16
+00:01:38,080 --> 00:01:47,990
+solicitando 20 kW. A demanda solicitada passa para 80 kW, acima do limite disponível
+
+17
+00:01:47,990 --> 00:01:55,270
+da rede. O algoritmo Equal Share entra em ação e redistribui a capacidade igualmente. Cada
+
+18
+00:01:55,270 --> 00:02:02,250
+veículo passa a receber 15 kW. Dessa forma, as quatro sessões continuam carregando, mas
+
+19
+00:02:02,250 --> 00:02:14,050
+a importação permanece limitada a 60 kW. No terceiro momento, configura-se uma disponibilidade
+
+20
+00:02:14,050 --> 00:02:20,550
+de 20 kW de energia solar. O sistema prioriza essa fonte renovável e mantém a demanda dentro
+
+21
+00:02:20,550 --> 00:02:27,830
+do mesmo limite de 60 kW. Assim, a instalação consegue entregar os 80 kW solicitados, 20
+
+22
+00:02:27,830 --> 00:02:34,010
+provenientes da energia solar e 60 da rede. Cada uma das quatro sessões volta a receber
+
+23
+00:02:34,010 --> 00:02:41,070
+os 20 kW solicitados, sem violar os limites dos veículos, carregadores ou da estação.
+
+24
+00:02:41,570 --> 00:02:48,250
+No dashboard administrativo, o gestor acompanha a demanda, o limite da rede e a utilização
+
+25
+00:02:48,250 --> 00:02:55,470
+da geração solar, as sessões ativas, a energia consumida e os indicadores ambientais.
+
+26
+00:02:56,190 --> 00:03:03,790
+Os gráficos mostram a evolução de demanda de 60 para 80 kW e separam claramente a participação
+
+27
+00:03:03,790 --> 00:03:09,790
+da rede e da geração solar. Cada tick também gera leituras persistidas para cada sessão.
+
+28
+00:03:10,210 --> 00:03:17,290
+Quando a importação atinge o limite de 60 kW, o sistema registra o alerta de alta demanda,
+
+29
+00:03:17,290 --> 00:03:21,870
+permitindo que o gestor identifique a condição operacional.
+
+30
+00:03:22,370 --> 00:03:26,970
+Para concluir o fluxo, encerramos a quarta sessão.
+
+31
+00:03:27,370 --> 00:03:31,210
+O sistema calcula automaticamente energia consumida
+
+32
+00:03:31,210 --> 00:03:34,610
+e gera uma invoice fechada de 47 centavos,
+
+33
+00:03:34,970 --> 00:03:38,890
+utilizando a tarifa cadastrada de 80 centavos por quilowatt-hora.
+
+34
+00:03:39,370 --> 00:03:43,890
+O uso da energia solar também é convertido em um indicador ambiental.
+
+35
+00:03:43,890 --> 00:03:53,590
+Neste cenário, a API calculou aproximadamente 13 centésimos de quilograma de CO2 evitado.
+
+36
+00:03:54,030 --> 00:03:59,610
+Dessa forma, o mesmo fluxo conecta operação, cobrança e sustentabilidade.
+
+37
+00:04:00,800 --> 00:04:07,060
+O projeto aplica pensamento computacional ao decompor problemas em sessões, alocação,
+
+38
+00:04:07,500 --> 00:04:11,040
+simulação, cobrança e análise de dados.
+
+39
+00:04:11,040 --> 00:04:17,410
+como a gente pode analisar aqui no nosso diagrama de sequência.
+
+40
+00:04:18,640 --> 00:04:24,680
+A automação em Python está presente na API, no controlador de ticks, no seed reproduzível
+
+41
+00:04:24,680 --> 00:04:29,160
+e no roteiro que executa o cenário por endpoints públicos.
+
+42
+00:04:29,660 --> 00:04:33,280
+É importante destacar que os valores apresentados são simulados.
+
+43
+00:04:33,580 --> 00:04:38,620
+Nesta sprint ainda não há integração com carregadores
+
+44
+00:04:38,620 --> 00:04:39,360
+físicos.
+
+45
+00:04:39,360 --> 00:04:46,700
+protocolo OCPP ou modelo de Machine Learning treinado. Como resultado, entregamos o protótipo
+
+46
+00:04:46,700 --> 00:04:53,740
+integrado, reproduzível e demonstrado, capaz de manter a rede dentro do limite, priorizar
+
+47
+00:04:53,740 --> 00:04:58,920
+energia solar e transformar cada recarga em inteligência operacional.
+
+48
+00:04:59,620 --> 00:05:02,080
+Este é o Charge Grid Intelligence. Muito obrigado.
