@@ -1,7 +1,8 @@
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_JWT_SECRET = "development-only-change-me-minimum-32-bytes"
@@ -21,13 +22,28 @@ class Settings(BaseSettings):
     app_cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     api_v1_prefix: str = "/api/v1"
     grid_emission_factor_kg_per_kwh: float = Field(default=0.0, ge=0)
+    demo_simulation_start_utc: datetime | None = None
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"
     jwt_secret_key: str = Field(default=DEFAULT_JWT_SECRET, min_length=32)
     jwt_expiration_minutes: int = Field(default=60, gt=0)
     jwt_algorithm: Literal["HS256"] = "HS256"
 
+    @field_validator("demo_simulation_start_utc", mode="before")
+    @classmethod
+    def empty_demo_start_is_unset(cls, value: object) -> object:
+        return None if value == "" else value
+
     @model_validator(mode="after")
     def reject_default_jwt_secret_outside_local_environments(self) -> "Settings":
+        if self.demo_simulation_start_utc is not None:
+            instant = self.demo_simulation_start_utc
+            if self.app_env.strip().lower() not in {"development", "demo", "test"}:
+                raise ValueError(
+                    "DEMO_SIMULATION_START_UTC is allowed only in local demo environments"
+                )
+            if instant.tzinfo is None or instant.utcoffset() != UTC.utcoffset(instant):
+                raise ValueError("DEMO_SIMULATION_START_UTC must be an explicit UTC instant")
+            self.demo_simulation_start_utc = instant.astimezone(UTC)
         if (
             self.app_env.strip().lower() in NON_LOCAL_ENVIRONMENTS
             and self.jwt_secret_key == DEFAULT_JWT_SECRET

@@ -26,7 +26,15 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-change-me-minimum-32-bytes}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      GRID_EMISSION_FACTOR_KG_PER_KWH: ${GRID_EMISSION_FACTOR_KG_PER_KWH:-0.0}
+      DEMO_SIMULATION_START_UTC: ${DEMO_SIMULATION_START_UTC:-}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +49,8 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v1}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:5173"
     volumes:

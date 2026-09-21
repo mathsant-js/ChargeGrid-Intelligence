@@ -7,6 +7,7 @@ from threading import RLock
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.energy import EnergyReading, SolarReading
 from app.models.prediction import SystemConfiguration
 from app.services.energy_allocation import EqualSharePowerResolver
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 class SimulationController:
     def __init__(self, clock: SimulationClock | None = None) -> None:
-        self.clock = clock or SimulationClock(initial_instant=datetime.now(UTC))
+        self.clock = clock or SimulationClock(
+            initial_instant=get_settings().demo_simulation_start_utc or datetime.now(UTC)
+        )
         self.last_tick: datetime | None = None
         self.lock = RLock()
 

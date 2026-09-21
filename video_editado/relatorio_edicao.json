@@ -1,0 +1,32 @@
+{
+  "source": "/home/mathsant/2026-09-21 17-09-13.mkv",
+  "output": "/home/mathsant/Documentos/Fiap/ChallengeGoodwe2026/ChargeGrid_IntelligencePlatform/video_editado/2026-09-21_17-09-13_editado.mp4",
+  "language": "pt",
+  "language_probability": 1,
+  "kept_intervals": [
+    [
+      2.2,
+      69.2
+    ],
+    [
+      71.08,
+      165.4
+    ],
+    [
+      166.63,
+      207.43
+    ],
+    [
+      213.0,
+      280.29
+    ],
+    [
+      281.86,
+      314.78
+    ]
+  ],
+  "kept_duration_seconds": 302.33,
+  "original_duration_seconds": 317.12,
+  "removed_duration_seconds": 14.79,
+  "caption_count": 48
+}

@@ -153,6 +153,7 @@ activemq-data/
 !.env.example
 .envrc
 .venv
+.video-edit-venv/
 env/
 venv/
 ENV/
@@ -235,6 +236,9 @@ data/models/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/models/.gitkeep
+
+# Generated temporary artifacts
+tmp/
 
 # Streamlit
 .streamlit/secrets.toml

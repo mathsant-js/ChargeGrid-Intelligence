@@ -1,0 +1,29 @@
+sequenceDiagram
+  participant U as USER
+  participant A as ADMIN
+  participant API as API FastAPI
+  participant C as Controlador de simulação
+  participant S as Provedor solar simulado
+  participant P as Alocador Equal Share
+  participant DB as PostgreSQL
+  U->>API: POST /sessions/start (3, depois 4)
+  API->>DB: grava sessões
+  A->>API: POST /simulation/ticks (manual)
+  API->>C: execute_tick
+  C->>DB: consulta sessões ativas
+  C->>S: consulta solar disponível
+  C->>P: resolve potência e rateio solar
+  C->>DB: grava leituras e alerta
+  API-->>A: valores do tick
+  A->>API: PATCH /stations/{id} (pico solar 20 kW)
+  A->>API: POST /simulation/ticks (manual, com solar)
+  API->>C: execute_tick com novo pico
+  C->>S: consulta curva solar UTC
+  C->>P: calcula 20 kW solar + 60 kW rede
+  C->>DB: grava leituras do terceiro tick
+  U->>API: GET /user/dashboard
+  A->>API: GET /analytics/dashboard e /alerts
+  API->>DB: consulta dados persistidos
+  U->>API: POST /sessions/{id}/stop
+  API->>DB: encerra sessão e cria invoice simulada
+  U->>API: GET /billing/invoices
