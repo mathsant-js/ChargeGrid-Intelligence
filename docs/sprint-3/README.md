@@ -16,7 +16,7 @@ Este roteiro demonstra, por simulação, o Golden Path de `SPEC.md` §§ 54–55
 
 ## Arquitetura e escolhas
 
-- [Arquitetura executada](architecture.mmd) e [sequência da demo](sequence.mmd) são diagramas Mermaid versionados. Exporte PNGs apenas após executar o ensaio e conferir as setas contra a API.
+- [Arquitetura executada em PNG](diagrams/architecture.png) ([fonte Mermaid](architecture.mmd)) e [sequência da demo em PNG](diagrams/sequence.png) ([fonte Mermaid](sequence.mmd)) representam o fluxo conferido contra a API.
 - O monólito modular usa React, FastAPI, SQLAlchemy e PostgreSQL. O controlador de simulação recebe ticks manuais; `SimulationEnergyDataProvider` fornece a curva solar UTC. O alocador Equal Share respeita os limites de rede, carregador e veículo. A API calcula billing e analytics.
 - A simulação não possui agendador, controle físico, OCPP/Modbus nem modelo ML treinado. O script apenas orquestra endpoints públicos.
 
