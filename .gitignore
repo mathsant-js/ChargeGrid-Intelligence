@@ -237,5 +237,8 @@ data/models/*
 !data/processed/.gitkeep
 !data/models/.gitkeep
 
+# Generated temporary artifacts
+tmp/
+
 # Streamlit
 .streamlit/secrets.toml
