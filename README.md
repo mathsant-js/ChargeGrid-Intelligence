@@ -68,6 +68,22 @@ O alvo executa testes, lint e verificação de tipos no backend e no frontend, a
 
 Execute o [roteiro reproduzível da Sprint 3](docs/sprint-3/README.md) em um banco isolado. Ele inclui comandos de seed, configuração UTC, cenário por endpoints públicos e resultados esperados.
 
+### Documento da Sprint 3 em PDF
+
+Acesse o [documento da Sprint 3 em PDF](output/pdf/chargegrid_sprint_3.pdf).
+
+### Documento da Sprint 3 em Markdown
+
+Acesse o [documento da Sprint 3 em Markdown](docs/sprint-3/chargegrid_sprint_3.md).
+
+### Vídeo pitch da Sprint 3 em MP4
+
+Acesse o [arquivo MP4 do vídeo pitch da Sprint 3](video_editado/Pitch_challenge_sprint3.mp4).
+
+### Vídeo pitch da Sprint 3 no YouTube
+
+Assista ao [vídeo pitch da Sprint 3 no YouTube](https://youtu.be/caGX1bfDN7s).
+
 Após configurar `.env` e exportar `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` conforme o roteiro:
 
 ```bash
