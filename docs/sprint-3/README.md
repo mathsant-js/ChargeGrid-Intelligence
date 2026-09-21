@@ -30,7 +30,7 @@ cp .env.example .env
 read -rsp 'Senha ADMIN da demo: ' DEMO_ADMIN_PASSWORD; echo
 read -rsp 'Senha USER da demo: ' DEMO_USER_PASSWORD; echo
 export DEMO_ADMIN_PASSWORD DEMO_USER_PASSWORD
-docker compose up --build -d
+docker compose up --build --wait -d
 docker compose exec -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python -m app.demo_seed
 DEMO_ADMIN_PASSWORD="$DEMO_ADMIN_PASSWORD" DEMO_USER_PASSWORD="$DEMO_USER_PASSWORD" python3 scripts/sprint3_demo.py | tee /tmp/chargegrid-sprint3-evidence.txt
 ```

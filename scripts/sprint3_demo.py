@@ -2,13 +2,15 @@
 
 import json
 import os
+import time
 from datetime import datetime
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 BASE = os.environ.get("DEMO_API_URL", "http://localhost:8000/api/v1").rstrip("/")
 PREFIX = "SPRINT3-DEMO"
+API_READY_TIMEOUT_SECONDS = 30
 
 
 def call(method: str, path: str, token: str | None = None, body: dict | None = None,
@@ -24,6 +26,30 @@ def call(method: str, path: str, token: str | None = None, body: dict | None = N
             return json.load(response)
     except HTTPError as exc:
         raise RuntimeError(f"{method} {path}: HTTP {exc.code} {exc.read().decode()}") from exc
+    except (ConnectionError, TimeoutError, URLError) as exc:
+        raise RuntimeError(
+            f"{method} {path}: API connection failed at {BASE}. "
+            "Check `docker compose ps` and `docker compose logs backend`."
+        ) from exc
+
+
+def wait_for_api(timeout_seconds: float = API_READY_TIMEOUT_SECONDS) -> None:
+    """Wait for startup without retrying any operation that changes demo state."""
+    deadline = time.monotonic() + timeout_seconds
+    last_error: OSError | None = None
+    health_url = BASE + "/health"
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(health_url, timeout=2) as response:
+                if response.status == 200:
+                    return
+        except (ConnectionError, TimeoutError, URLError) as exc:
+            last_error = exc
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"API did not become ready at {health_url} within {timeout_seconds:g}s. "
+        "Check `docker compose ps` and `docker compose logs backend`."
+    ) from last_error
 
 
 def login(email: str, password: str) -> str:
@@ -42,9 +68,15 @@ def tick(admin: str, station_id: str, expected_count: int,
     latest = [row for row in readings if row["timestamp"] == result["timestamp"]]
     if len(latest) != expected_count:
         raise RuntimeError(f"Expected {expected_count} readings, got {len(latest)}")
-    totals = {key: round(sum(row[key] for row in latest), 4)
-              for key in ("allocated_power_kw", "solar_power_kw", "grid_power_kw", "interval_energy_kwh")}
-    if totals["grid_power_kw"] > 60.0001 or any(row["allocated_power_kw"] > 20.0001 for row in latest):
+    total_keys = (
+        "allocated_power_kw",
+        "solar_power_kw",
+        "grid_power_kw",
+        "interval_energy_kwh",
+    )
+    totals = {key: round(sum(row[key] for row in latest), 4) for key in total_keys}
+    allocation_exceeded = any(row["allocated_power_kw"] > 20.0001 for row in latest)
+    if totals["grid_power_kw"] > 60.0001 or allocation_exceeded:
         raise RuntimeError("Energy limit violated")
     if (abs(totals["grid_power_kw"] - 60) > 0.01
             or abs(totals["solar_power_kw"] - expected_solar_kw) > 0.1
@@ -58,6 +90,7 @@ def main() -> None:
     user_password = os.environ.get("DEMO_USER_PASSWORD")
     if not admin_password or not user_password:
         raise SystemExit("Set DEMO_ADMIN_PASSWORD and DEMO_USER_PASSWORD")
+    wait_for_api()
     admin = login("sprint3-admin@demo.invalid", admin_password)
     users = [login(f"sprint3-user-{i}@demo.invalid", user_password) for i in range(1, 5)]
     stations = call("GET", "/stations", admin)
