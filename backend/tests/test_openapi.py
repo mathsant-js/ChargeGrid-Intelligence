@@ -55,6 +55,15 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/sessions/{session_id}/stop", "post"),
         ("/api/v1/billing/invoices", "get"),
         ("/api/v1/billing/invoices/{invoice_id}", "get"),
+        ("/api/v1/energy/current", "get"),
+        ("/api/v1/energy/history", "get"),
+        ("/api/v1/solar/current", "get"),
+        ("/api/v1/solar/history", "get"),
+        ("/api/v1/predictions/demand", "get"),
+        ("/api/v1/predictions/demand", "post"),
+        ("/api/v1/system-configuration", "get"),
+        ("/api/v1/system-configuration", "post"),
+        ("/api/v1/system-configuration", "patch"),
     }
     for path, method in protected_operations:
         assert paths[path][method]["security"] == bearer
@@ -88,6 +97,15 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/sessions/{session_id}/stop", "post"): {"401", "403", "404", "409"},
         ("/api/v1/billing/invoices", "get"): {"401", "404"},
         ("/api/v1/billing/invoices/{invoice_id}", "get"): {"401", "404"},
+        ("/api/v1/energy/current", "get"): {"401"},
+        ("/api/v1/energy/history", "get"): {"401"},
+        ("/api/v1/solar/current", "get"): {"401"},
+        ("/api/v1/solar/history", "get"): {"401"},
+        ("/api/v1/predictions/demand", "get"): {"401", "404"},
+        ("/api/v1/predictions/demand", "post"): {"401", "403", "404"},
+        ("/api/v1/system-configuration", "get"): {"401", "403", "404"},
+        ("/api/v1/system-configuration", "post"): {"401", "403", "409"},
+        ("/api/v1/system-configuration", "patch"): {"401", "403", "404"},
     }
     for (path, method), expected_statuses in expected_error_responses.items():
         responses = paths[path][method]["responses"]

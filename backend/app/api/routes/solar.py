@@ -5,7 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from sqlalchemy import Select, select
 
-from app.api.routes.common import DbSession
+from app.api.dependencies import CurrentUser
+from app.api.routes.common import UNAUTHORIZED_RESPONSE, DbSession
 from app.models.energy import SolarReading
 from app.schemas.energy import SolarReadingResponse
 
@@ -27,17 +28,24 @@ def _filtered_readings(
     return query
 
 
-@router.get("/current", response_model=SolarReadingResponse | None)
-async def current_solar(db: DbSession, station_id: UUID | None = None) -> SolarReading | None:
+@router.get(
+    "/current", response_model=SolarReadingResponse | None, responses=UNAUTHORIZED_RESPONSE
+)
+async def current_solar(
+    db: DbSession, _: CurrentUser, station_id: UUID | None = None
+) -> SolarReading | None:
     query = _filtered_readings(station_id, None, None).order_by(
         SolarReading.timestamp.desc(), SolarReading.id.desc()
     )
     return db.scalar(query.limit(1))
 
 
-@router.get("/history", response_model=list[SolarReadingResponse])
+@router.get(
+    "/history", response_model=list[SolarReadingResponse], responses=UNAUTHORIZED_RESPONSE
+)
 async def solar_history(
     db: DbSession,
+    _: CurrentUser,
     date_from: DateFrom = None,
     date_to: DateTo = None,
     station_id: UUID | None = None,

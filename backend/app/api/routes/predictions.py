@@ -4,7 +4,16 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from app.api.routes.common import DbSession, commit_or_conflict, get_or_404
+from app.api.dependencies import AdminUser, CurrentUser
+from app.api.routes.common import (
+    CONFLICT_RESPONSE,
+    FORBIDDEN_RESPONSE,
+    NOT_FOUND_RESPONSE,
+    UNAUTHORIZED_RESPONSE,
+    DbSession,
+    commit_or_conflict,
+    get_or_404,
+)
 from app.models.infrastructure import ChargingStation
 from app.models.prediction import DemandPrediction, SystemConfiguration
 from app.schemas.prediction import (
@@ -20,9 +29,13 @@ predictions_router = APIRouter(prefix="/predictions", tags=["predictions"])
 configuration_router = APIRouter(prefix="/system-configuration", tags=["configuration"])
 
 
-@predictions_router.get("/demand", response_model=DemandPredictionResponse)
+@predictions_router.get(
+    "/demand",
+    response_model=DemandPredictionResponse,
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
 async def get_latest_demand_prediction(
-    db: DbSession, station_id: UUID | None = None
+    db: DbSession, _: CurrentUser, station_id: UUID | None = None
 ) -> DemandPrediction:
     statement = select(DemandPrediction)
     if station_id is not None:
@@ -38,10 +51,13 @@ async def get_latest_demand_prediction(
 
 
 @predictions_router.post(
-    "/demand", response_model=DemandPredictionResponse, status_code=status.HTTP_201_CREATED
+    "/demand",
+    response_model=DemandPredictionResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE,
 )
 async def create_demand_prediction(
-    payload: DemandPredictionCreate, db: DbSession
+    payload: DemandPredictionCreate, db: DbSession, _: AdminUser
 ) -> DemandPrediction:
     get_or_404(db, ChargingStation, payload.station_id)
     prediction = DemandPrediction(**payload.model_dump())
@@ -51,8 +67,12 @@ async def create_demand_prediction(
     return prediction
 
 
-@configuration_router.get("", response_model=SystemConfigurationResponse)
-async def get_system_configuration(db: DbSession) -> SystemConfiguration:
+@configuration_router.get(
+    "",
+    response_model=SystemConfigurationResponse,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE,
+)
+async def get_system_configuration(db: DbSession, _: AdminUser) -> SystemConfiguration:
     configuration = db.scalar(select(SystemConfiguration).limit(1))
     if configuration is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found")
@@ -60,10 +80,13 @@ async def get_system_configuration(db: DbSession) -> SystemConfiguration:
 
 
 @configuration_router.post(
-    "", response_model=SystemConfigurationResponse, status_code=status.HTTP_201_CREATED
+    "",
+    response_model=SystemConfigurationResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | CONFLICT_RESPONSE,
 )
 async def create_system_configuration(
-    payload: SystemConfigurationCreate, db: DbSession
+    payload: SystemConfigurationCreate, db: DbSession, _: AdminUser
 ) -> SystemConfiguration:
     if db.scalar(select(SystemConfiguration.id).limit(1)) is not None:
         raise HTTPException(
@@ -76,11 +99,15 @@ async def create_system_configuration(
     return configuration
 
 
-@configuration_router.patch("", response_model=SystemConfigurationResponse)
+@configuration_router.patch(
+    "",
+    response_model=SystemConfigurationResponse,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE,
+)
 async def update_system_configuration(
-    payload: SystemConfigurationUpdate, db: DbSession
+    payload: SystemConfigurationUpdate, db: DbSession, admin: AdminUser
 ) -> SystemConfiguration:
-    configuration = await get_system_configuration(db)
+    configuration = await get_system_configuration(db, admin)
     values = {
         "simulation_speed": configuration.simulation_speed,
         "grid_emission_factor_kg_per_kwh": configuration.grid_emission_factor_kg_per_kwh,

@@ -1,11 +1,15 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.orm import Session
 
-from app.models.energy import ChargingSession, EnergyReading, SolarReading
+from app.core.security import hash_password
+from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
+from app.models.user import User, UserRole
+from app.models.vehicle import Vehicle
 
 
 async def create_session_dependencies(client: AsyncClient) -> tuple[dict[str, object], ...]:
@@ -190,3 +194,79 @@ async def test_energy_and_solar_current_history_filters(
     assert solar_current.json()["available_power_kw"] == 9
     solar_history = await client.get("/api/v1/solar/history", params={"to": earlier.isoformat()})
     assert [reading["available_power_kw"] for reading in solar_history.json()] == [12]
+
+
+@pytest.mark.anyio
+async def test_regular_user_energy_queries_do_not_expose_other_users_readings(
+    client: AsyncClient, db_session: Session
+) -> None:
+    _, vehicle, station, charger = await create_session_dependencies(client)
+    own_session_response = await client.post(
+        "/api/v1/sessions/start",
+        json={"vehicle_id": vehicle["id"], "charger_id": charger["id"]},
+    )
+    own_session = db_session.get(ChargingSession, UUID(own_session_response.json()["id"]))
+    assert own_session is not None
+
+    other_user = User(
+        name="Other driver",
+        email="other-energy@example.com",
+        password_hash=hash_password("password-123"),
+        role=UserRole.USER,
+        is_active=True,
+    )
+    db_session.add(other_user)
+    db_session.flush()
+    other_vehicle = Vehicle(
+        user_id=other_user.id,
+        name="Other EV",
+        brand="Brand",
+        model="Other",
+        license_plate="OTHER-EV",
+        max_charge_power_kw=11,
+    )
+    db_session.add(other_vehicle)
+    db_session.flush()
+    other_session = ChargingSession(
+        user_id=other_user.id,
+        vehicle_id=other_vehicle.id,
+        charger_id=UUID(str(charger["id"])),
+        status=ChargingSessionStatus.COMPLETED,
+        requested_power_kw=11,
+        allocated_power_kw=0,
+        tariff_per_kwh=Decimal("0.9200"),
+    )
+    db_session.add(other_session)
+    db_session.flush()
+    timestamp = datetime(2026, 9, 23, 12, tzinfo=UTC)
+    own_reading = EnergyReading(
+        session_id=own_session.id,
+        timestamp=timestamp,
+        requested_power_kw=11,
+        allocated_power_kw=7,
+        solar_power_kw=2,
+        grid_power_kw=5,
+        interval_energy_kwh=0.5,
+        solar_energy_kwh=0.2,
+        grid_energy_kwh=0.3,
+    )
+    other_reading = EnergyReading(
+        session_id=other_session.id,
+        timestamp=timestamp + timedelta(minutes=1),
+        requested_power_kw=11,
+        allocated_power_kw=10,
+        solar_power_kw=4,
+        grid_power_kw=6,
+        interval_energy_kwh=0.6,
+        solar_energy_kwh=0.25,
+        grid_energy_kwh=0.35,
+    )
+    db_session.add_all([own_reading, other_reading])
+    db_session.commit()
+
+    current = await client.get("/api/v1/energy/current", params={"station_id": station["id"]})
+    history = await client.get("/api/v1/energy/history", params={"station_id": station["id"]})
+
+    assert current.status_code == history.status_code == 200
+    assert current.json()["id"] == str(own_reading.id)
+    assert [item["id"] for item in history.json()] == [str(own_reading.id)]

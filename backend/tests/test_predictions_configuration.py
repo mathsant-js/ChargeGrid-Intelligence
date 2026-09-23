@@ -2,6 +2,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.orm import Session
+
+from app.core.security import hash_password
+from app.models.user import User, UserRole
 
 
 async def create_station(
@@ -13,6 +17,67 @@ async def create_station(
     )
     assert response.status_code == 201
     return response.json()
+
+
+@pytest.mark.anyio
+async def test_protected_operational_endpoints_reject_missing_and_invalid_tokens(
+    client: AsyncClient,
+) -> None:
+    paths = (
+        "/api/v1/energy/current",
+        "/api/v1/energy/history",
+        "/api/v1/solar/current",
+        "/api/v1/solar/history",
+        "/api/v1/predictions/demand",
+        "/api/v1/system-configuration",
+    )
+    client.headers.pop("Authorization")
+    for path in paths:
+        missing = await client.get(path)
+        invalid = await client.get(path, headers={"Authorization": "Bearer invalid"})
+        assert missing.status_code == invalid.status_code == 401
+        assert missing.headers["www-authenticate"] == "Bearer"
+        assert invalid.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.anyio
+async def test_system_configuration_and_prediction_creation_require_admin(
+    client: AsyncClient, db_session: Session
+) -> None:
+    user = User(
+        name="Regular user",
+        email="configuration-user@example.com",
+        password_hash=hash_password("password-123"),
+        role=UserRole.USER,
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": user.email, "password": "password-123"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    configuration = {
+        "simulation_speed": 60,
+        "grid_emission_factor_kg_per_kwh": 0.084,
+        "high_demand_threshold": 0.8,
+        "medium_peak_threshold": 0.7,
+        "high_peak_threshold": 0.9,
+    }
+
+    assert (
+        await client.post("/api/v1/system-configuration", headers=headers, json=configuration)
+    ).status_code == 403
+    assert (
+        await client.patch(
+            "/api/v1/system-configuration", headers=headers, json={"simulation_speed": 120}
+        )
+    ).status_code == 403
+    assert (await client.get("/api/v1/system-configuration", headers=headers)).status_code == 403
+    assert (
+        await client.post("/api/v1/predictions/demand", headers=headers, json={})
+    ).status_code == 403
 
 
 @pytest.mark.anyio
