@@ -22,7 +22,7 @@ Este roteiro demonstra, por simulação, o Golden Path de `SPEC.md` §§ 54–55
 
 ## Reprodução em banco de demo limpo
 
-Use um banco isolado e um único processo controlador da API. Edite `.env` localmente para definir `APP_ENV=development`, `DEMO_SIMULATION_START_UTC=2026-09-18T11:58:00Z` e `GRID_EMISSION_FACTOR_KG_PER_KWH=0.4`. O horário é deliberadamente próximo do pico solar UTC. O fator da API vem dessa variável de ambiente; o seed registra o mesmo 0,4 em `SystemConfiguration`. Guarde `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` somente no ambiente, com pelo menos oito caracteres cada.
+Use um banco isolado e um único processo controlador da API. Edite `.env` localmente para definir `APP_ENV=demo`, `DEMO_SIMULATION_START_UTC=2026-09-18T11:58:00Z` e `GRID_EMISSION_FACTOR_KG_PER_KWH=0.4`. O relógio determinístico só é aceito quando `APP_ENV=demo` (ou no ambiente isolado da suíte); desenvolvimento comum, staging e produção rejeitam essa configuração. O horário é deliberadamente próximo do pico solar UTC. O fator da API vem dessa variável de ambiente; o seed registra o mesmo 0,4 em `SystemConfiguration`. Guarde `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` somente no ambiente, com pelo menos oito caracteres cada.
 
 ```bash
 cp .env.example .env
@@ -35,7 +35,7 @@ docker compose exec -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python 
 DEMO_ADMIN_PASSWORD="$DEMO_ADMIN_PASSWORD" DEMO_USER_PASSWORD="$DEMO_USER_PASSWORD" python3 scripts/sprint3_demo.py | tee /tmp/chargegrid-sprint3-evidence.txt
 ```
 
-O seed aceita reexecução sem duplicar entidades. O roteiro exige banco limpo e sessão de simulação parada, pois cria sessões e leituras novas. O relógio configurado é opt-in e só vale em desenvolvimento/demo/teste; sem ele, inicia no horário atual. Reinicie a API após mudar `.env`.
+O seed aceita reexecução sem duplicar entidades. O roteiro exige banco limpo e sessão de simulação parada, pois cria sessões e leituras novas. O relógio configurado é opt-in e só vale em `demo`/`test`; sem ele, inicia no horário atual. A suíte força seu próprio ambiente de teste e ignora um relógio de demo presente no `.env`, portanto `make check` não exige limpar a variável manualmente. Reinicie a API após mudar `.env`.
 
 Confira os [resultados do ensaio](EVIDENCE.md). O roteiro imprime cada leitura e total por tick, alertas, dashboards, invoice e sustentabilidade. Resultados esperados: primeiro tick, três sessões a 20 kW; segundo, quatro sessões a 15 kW e 60 kW da rede; terceiro, aproximadamente 20 kW solares + 60 kW da rede, totalizando 80 kW. Cada tick representa um minuto. A tarifa seed é R$ 0,8000/kWh, e o fator de emissão é 0,4 kg/kWh. O valor final da invoice e CO₂ evitado devem ser conferidos na saída, considerando os arredondamentos da API.
 

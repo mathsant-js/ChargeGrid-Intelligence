@@ -33,6 +33,7 @@ def test_demo_seed_requires_passwords(db_session: Session) -> None:
 
 def test_demo_clock_is_opt_in_and_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as env:
+        env.setenv("APP_ENV", "demo")
         env.setenv("DEMO_SIMULATION_START_UTC", "2026-09-18T11:58:00Z")
         get_settings.cache_clear()
         assert SimulationController().clock.current_instant == datetime(
@@ -40,12 +41,22 @@ def test_demo_clock_is_opt_in_and_utc(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         env.setenv("APP_ENV", "production")
         env.setenv("JWT_SECRET_KEY", "a" * 32)
-        with pytest.raises(ValueError, match="local demo"):
+        with pytest.raises(ValueError, match="demo or test"):
             Settings()
-        env.setenv("APP_ENV", "development")
+        env.setenv("APP_ENV", "demo")
         env.setenv("DEMO_SIMULATION_START_UTC", "2026-09-18T11:58:00")
         with pytest.raises(ValueError, match="explicit UTC"):
             Settings()
     get_settings.cache_clear()
     elapsed = SimulationController().clock.current_instant - datetime.now(UTC)
     assert abs(elapsed.total_seconds()) < 5
+
+
+def test_demo_clock_is_rejected_in_regular_development(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DEMO_SIMULATION_START_UTC", "2026-09-18T11:58:00Z")
+
+    with pytest.raises(ValueError, match="demo or test"):
+        Settings()

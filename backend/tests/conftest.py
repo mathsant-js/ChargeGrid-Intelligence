@@ -1,6 +1,13 @@
+import os
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+
+# Tests must not inherit demo-only clock settings from the developer's .env.
+# Set these before importing the application, which creates the process-wide
+# simulation controller during module import.
+os.environ["APP_ENV"] = "test"
+os.environ["DEMO_SIMULATION_START_UTC"] = ""
 
 import pytest
 from httpx import ASGITransport, AsyncClient

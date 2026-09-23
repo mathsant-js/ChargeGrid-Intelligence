@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     def reject_default_jwt_secret_outside_local_environments(self) -> "Settings":
         if self.demo_simulation_start_utc is not None:
             instant = self.demo_simulation_start_utc
-            if self.app_env.strip().lower() not in {"development", "demo", "test"}:
+            if self.app_env.strip().lower() not in {"demo", "test"}:
                 raise ValueError(
-                    "DEMO_SIMULATION_START_UTC is allowed only in local demo environments"
+                    "DEMO_SIMULATION_START_UTC is allowed only in demo or test environments"
                 )
             if instant.tzinfo is None or instant.utcoffset() != UTC.utcoffset(instant):
                 raise ValueError("DEMO_SIMULATION_START_UTC must be an explicit UTC instant")
