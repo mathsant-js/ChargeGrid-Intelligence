@@ -15,7 +15,7 @@ export interface Filters { station_id?: string; user_id?: string; from?: string;
 export interface Station { id: string; name: string; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
 export interface Charger { id: string; station_id: string; name: string; status: 'AVAILABLE' | 'CHARGING' | 'UNAVAILABLE'; is_active: boolean }
 export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }
-export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string }
+export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string; recommendation: string }
 export interface Alert { id: string; station_id: string; type: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; title: string; message: string; created_at: string; acknowledged_at: string | null }
 
 export class ApiError extends Error {
@@ -69,6 +69,7 @@ export const api = {
   chargers: () => request<Charger[]>('/chargers'),
   solarHistory: (filters?: Filters) => request<SolarReading[]>(`/solar/history${query(filters)}`),
   prediction: (station_id: string) => request<DemandPrediction>(`/predictions/demand${query({ station_id })}`),
+  runPrediction: (station_id: string) => request<DemandPrediction>('/predictions/demand/run', { method: 'POST', body: JSON.stringify({ station_id }) }),
   alerts: (station_id?: string) => request<Alert[]>(`/alerts${query({ station_id })}`),
   acknowledgeAlert: (id: string) => request<Alert>(`/alerts/${encodeURIComponent(id)}/acknowledge`, { method: 'PATCH' }),
 }
