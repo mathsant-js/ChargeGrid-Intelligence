@@ -12,13 +12,13 @@
 - Marcos Peterson Martins Pereira
 - Matheus Jorge Santana
 
-Este roteiro demonstra, por simulação, o Golden Path de `SPEC.md` §§ 54–55. As leituras solares e de energia são **simuladas**; não representam medições físicas. Billing e invoice também são simulados. A previsão automática e o risco de pico dependem da Fase 7; o dashboard deixa esse KPI sem valor quando não há previsão válida.
+Este roteiro demonstra, por simulação, o cenário energético de `SPEC.md` §§ 54–55. As leituras solares e de energia são **simuladas**; não representam medições físicas. Billing e invoice também são simulados. A previsão e o risco de pico foram implementados na Fase 7, mas exigem artefato treinado e histórico causal; o seed deste roteiro não prepara sozinho esse histórico.
 
 ## Arquitetura e escolhas
 
 - [Arquitetura executada em PNG](diagrams/architecture.png) ([fonte Mermaid](architecture.mmd)) e [sequência da demo em PNG](diagrams/sequence.png) ([fonte Mermaid](sequence.mmd)) representam o fluxo conferido contra a API.
 - O monólito modular usa React, FastAPI, SQLAlchemy e PostgreSQL. O controlador de simulação recebe ticks manuais; `SimulationEnergyDataProvider` fornece a curva solar UTC. O alocador Equal Share respeita os limites de rede, carregador e veículo. A API calcula billing e analytics.
-- A simulação não possui agendador, controle físico, OCPP/Modbus nem modelo ML treinado. O script apenas orquestra endpoints públicos.
+- A simulação não possui agendador, controle físico ou OCPP/Modbus. O script orquestra endpoints públicos; o treinamento e a inferência ML são executados separadamente conforme a Fase 7.
 
 ## Reprodução em banco de demo limpo
 
@@ -49,6 +49,7 @@ Abra [OpenAPI](http://localhost:8000/docs), [dashboard administrativo](http://lo
 4. Configurar 20 kW de pico solar pela API e mostrar o terceiro tick de cerca de 80 kW.
 5. Mostrar leituras, alerta e dashboards atualizados.
 6. Encerrar a quarta sessão, mostrar invoice, tarifa e CO₂ evitado.
-7. Explicar os limites: sem equipamento real e sem previsão automática de demanda.
+7. Mostrar, em ambiente preparado conforme a Fase 7, previsão, risco e alerta consultivos.
+8. Explicar os limites: sem equipamento real, scheduler ou inferência imediata a partir do seed.
 
 Esta entrega do EV Challenge 2026 aplica Pensamento Computacional e Automação com Python à modelagem do cenário, ao controlador de simulação, ao seed reproduzível, à orquestração das chamadas HTTP e à validação automática dos limites energéticos. Inclua as evidências visuais capturadas antes da apresentação.

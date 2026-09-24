@@ -106,13 +106,14 @@ python3 scripts/sprint3_demo.py
 - [Fase 6 — Contratos da API de analytics](docs/PHASE_6_ANALYTICS.md)
 - [Fase 6 — Integração e limites](docs/PHASE_6.md)
 - [Fase 7 — ML, treinamento e inferência](docs/PHASE_7.md)
+- [Fase 8 — ESG e alertas](docs/PHASE_8.md)
+- [Fase 9 — Auditoria final do MVP](docs/PHASE_9.md)
 
 ## Estado atual
 
-As Fases 1 (fundação), 2 (domínio), 3 (simulação e leituras), 4 (gestão
-energética) e 5 (billing e histórico de invoices) estão concluídas, com
-critérios de saída e evidências documentados. As migrations das Fases 3 e 5
-foram validadas online em PostgreSQL. O backend entrega
+As Fases 1 a 9 do MVP foram implementadas e auditadas, com limitações e
+resultados de comandos registrados em [docs/PHASE_9.md](docs/PHASE_9.md).
+As migrations foram validadas em PostgreSQL 16. O backend entrega
 Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
 autorização por papel e propriedade, persistência
 via Alembic e regras de início/encerramento de sessão na camada de serviço.
@@ -132,7 +133,7 @@ por padrão), calcula energia em kWh e atualiza os acumuladores das sessões.
 O tick também cria `HIGH_DEMAND` quando a importação da rede atinge o limiar
 configurado em `SystemConfiguration` (0,85 na ausência de configuração). O
 alerta é emitido uma vez por episódio de alta demanda e participa da mesma
-transação das leituras. O tick ainda não atualiza analytics derivados.
+transação das leituras. Analytics e dashboards consultam as leituras persistidas.
 
 Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
 cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no

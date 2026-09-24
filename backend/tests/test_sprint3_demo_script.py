@@ -57,3 +57,36 @@ def test_wait_for_api_reports_backend_diagnostics(monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(RuntimeError, match=r"docker compose logs backend"):
         demo.wait_for_api(timeout_seconds=0.5)
+
+
+def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    demo = load_demo_script()
+    calls: list[tuple[str, str, str | None]] = []
+
+    def fake_call(
+        method: str,
+        path: str,
+        token: str | None = None,
+        body: dict | None = None,
+        params: dict | None = None,
+    ) -> object:
+        calls.append((method, path, token))
+        if path == "/simulation/ticks":
+            return {"timestamp": "2026-09-18T11:58:00Z"}
+        return [
+            {
+                "timestamp": "2026-09-18T11:58:00Z",
+                "allocated_power_kw": 20,
+                "solar_power_kw": 0,
+                "grid_power_kw": 20,
+                "interval_energy_kwh": 1 / 3,
+            }
+            for _ in range(3)
+        ]
+
+    monkeypatch.setattr(demo, "call", fake_call)
+    monkeypatch.setattr(demo, "show", lambda *_: None)
+
+    demo.tick("admin-token", "station-id", expected_count=3, expected_solar_kw=0)
+
+    assert ("GET", "/energy/history", "admin-token") in calls
