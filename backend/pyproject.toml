@@ -10,10 +10,13 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14,<2",
   "fastapi>=0.115,<0.116",
+  "joblib>=1.4,<2",
+  "pandas>=2.2,<3",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.7,<3",
   "PyJWT>=2.10,<3",
   "sqlalchemy>=2.0,<3",
+  "scikit-learn>=1.6,<2",
   "uvicorn[standard]>=0.34,<1",
 ]
 
@@ -46,5 +49,5 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["alembic.*"]
+module = ["alembic.*", "joblib", "pandas", "sklearn.*"]
 ignore_missing_imports = true

@@ -125,6 +125,7 @@ def test_pipeline_writes_dataset_and_training_metadata(tmp_path: Path) -> None:
     metadata = run_pipeline(
         dataset_path=dataset_path,
         metadata_path=metadata_path,
+        artifact_path=tmp_path / "model.joblib",
         config=DatasetConfig(days=1, seed=9),
         test_fraction=0.2,
     )
