@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import joblib
 import pandas as pd
@@ -76,18 +76,41 @@ class TrainingResult:
     comparison: ModelComparison
 
 
+class DemandFeatureRow(Protocol):
+    @property
+    def hour(self) -> int: ...
+
+    @property
+    def day_of_week(self) -> int: ...
+
+    @property
+    def is_weekend(self) -> bool: ...
+
+    @property
+    def active_sessions(self) -> int: ...
+
+    @property
+    def current_demand_kw(self) -> float: ...
+
+    @property
+    def historical_avg_demand_kw(self) -> float: ...
+
+    @property
+    def solar_available_kw(self) -> float: ...
+
+
 @dataclass(frozen=True, slots=True)
 class LoadedDemandModel:
     model: RandomForestRegressor
     metadata: ModelMetadata
 
-    def predict(self, rows: Sequence[DemandDatasetRow]) -> list[float]:
+    def predict(self, rows: Sequence[DemandFeatureRow]) -> list[float]:
         frame = _feature_frame(rows, self.metadata.features)
         return [float(value) for value in self.model.predict(frame)]
 
 
 def _feature_frame(
-    rows: Sequence[DemandDatasetRow], features: Sequence[str] = MODEL_FEATURES
+    rows: Sequence[DemandFeatureRow], features: Sequence[str] = MODEL_FEATURES
 ) -> pd.DataFrame:
     return pd.DataFrame(
         [{feature: getattr(row, feature) for feature in features} for row in rows],

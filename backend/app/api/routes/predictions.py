@@ -14,16 +14,21 @@ from app.api.routes.common import (
     commit_or_conflict,
     get_or_404,
 )
+from app.core.config import get_settings
+from app.ml.training import ModelArtifactError
 from app.models.infrastructure import ChargingStation
 from app.models.prediction import DemandPrediction, SystemConfiguration
+from app.schemas.common import ErrorResponse
 from app.schemas.prediction import (
     DemandPredictionCreate,
     DemandPredictionResponse,
+    DemandPredictionRun,
     SystemConfigurationCreate,
     SystemConfigurationResponse,
     SystemConfigurationUpdate,
     SystemConfigurationValues,
 )
+from app.services.demand_predictions import PredictionDataError, run_demand_prediction
 
 predictions_router = APIRouter(prefix="/predictions", tags=["predictions"])
 configuration_router = APIRouter(prefix="/system-configuration", tags=["configuration"])
@@ -62,6 +67,44 @@ async def create_demand_prediction(
     get_or_404(db, ChargingStation, payload.station_id)
     prediction = DemandPrediction(**payload.model_dump())
     db.add(prediction)
+    commit_or_conflict(db)
+    db.refresh(prediction)
+    return prediction
+
+
+@predictions_router.post(
+    "/demand/run",
+    response_model=DemandPredictionResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=UNAUTHORIZED_RESPONSE | FORBIDDEN_RESPONSE | NOT_FOUND_RESPONSE | {
+        422: {"model": ErrorResponse, "description": "Inference features are insufficient"},
+        503: {"model": ErrorResponse, "description": "Demand model is unavailable"},
+    },
+)
+async def execute_demand_prediction(
+    payload: DemandPredictionRun, db: DbSession, _: AdminUser
+) -> DemandPrediction:
+    station = db.scalar(
+        select(ChargingStation)
+        .where(ChargingStation.id == payload.station_id)
+        .with_for_update()
+    )
+    if station is None:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    configuration = db.scalar(select(SystemConfiguration).limit(1))
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+    try:
+        prediction = run_demand_prediction(
+            db,
+            station=station,
+            configuration=configuration,
+            artifact_path=get_settings().demand_model_path,
+        )
+    except PredictionDataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ModelArtifactError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     commit_or_conflict(db)
     db.refresh(prediction)
     return prediction

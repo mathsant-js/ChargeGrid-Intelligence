@@ -1,8 +1,8 @@
 # Fase 7 — Dataset, baseline e treinamento
 
-Esta fatia implementa a geração reproduzível do dataset temporal, avaliação do
-baseline, treinamento do modelo e persistência do artefato. A classificação de
-risco e sua integração com a aplicação permanecem para as próximas fatias.
+Esta fase implementa a geração reproduzível do dataset temporal, avaliação do
+baseline, treinamento e persistência do artefato, além da inferência consultiva
+integrada à aplicação.
 
 ## Decisões
 
@@ -20,7 +20,15 @@ risco e sua integração com a aplicação permanecem para as próximas fatias.
   períodos de treino/teste e métricas;
 - carregamento falha explicitamente para artefato ausente, inválido ou com
   features incompatíveis;
-- previsões são consultivas e não são conectadas ao alocador energético.
+- previsões são consultivas e não são conectadas ao alocador energético;
+- a inferência usa somente leituras com timestamp menor ou igual ao instante da
+  previsão e exige histórico anterior do mesmo par hora/dia da semana;
+- a capacidade efetiva é `grid_limit_kw + solar_available_kw`;
+- os limites `medium_peak_threshold` e `high_peak_threshold` vêm de
+  `SystemConfiguration`, com igualdade pertencendo ao nível superior;
+- recomendações são determinísticas para `LOW`, `MEDIUM` e `HIGH`;
+- um alerta `PEAK_RISK` crítico é criado apenas na entrada em `HIGH`; novas
+  execuções em `HIGH` no mesmo episódio não duplicam o alerta.
 
 ## Execução
 
@@ -38,6 +46,33 @@ cd backend
 Os parâmetros `--days`, `--seed`, `--test-fraction`, `--dataset`, `--metadata` e `--artifact`
 podem ser configurados. Os CSVs e JSONs gerados sob `data/` são ignorados pelo
 Git; apenas `.gitkeep` é versionado.
+
+## Inferência administrativa
+
+Configure `DEMAND_MODEL_PATH` (padrão
+`../data/models/demand_forecast.joblib`) e execute, autenticado como `ADMIN`:
+
+```http
+POST /api/v1/predictions/demand/run
+Content-Type: application/json
+
+{"station_id": "<uuid-da-estacao>"}
+```
+
+A execução produz uma previsão exatamente 60 minutos à frente e persiste
+`station_id`, `generated_at`, `prediction_for`, `predicted_demand_kw`,
+`capacity_kw`, `risk_level` e `model_version`. O retorno também contém a
+recomendação determinística e mantém o contrato consumido pelo dashboard em
+`GET /api/v1/predictions/demand?station_id=<uuid>`.
+
+Respostas operacionais relevantes:
+
+- `422`: não há leituras causais suficientes para montar todas as features;
+- `503`: o artefato está ausente, inválido ou incompatível;
+- `401`/`403`: autenticação ausente ou usuário sem papel administrativo.
+
+A inferência não chama o alocador, não atualiza `allocated_power_kw` e não pode
+substituir as invariantes determinísticas de energia.
 
 ## Resultado reproduzido
 
