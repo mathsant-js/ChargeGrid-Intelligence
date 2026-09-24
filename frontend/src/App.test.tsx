@@ -18,6 +18,7 @@ describe('authentication flow', () => {
       if (path.endsWith('/auth/login')) return json({ access_token: 'token', token_type: 'bearer' })
       if (path.endsWith('/auth/me')) return json(user)
       if (path.endsWith('/user/dashboard')) return json({ current_session: null, session_history: [], invoices: [] })
+      if (path.endsWith('/vehicles') || path.endsWith('/stations') || path.endsWith('/chargers')) return json([])
       throw Error(path)
     })
     show('/login')
@@ -58,12 +59,13 @@ describe('authentication flow', () => {
     tokenStore.set('saved')
     let attempts = 0
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
-      if (String(input).endsWith('/auth/me')) return json(user)
-      attempts += 1
-      return attempts === 1 ? json({ detail: 'error' }, 500) : json({ current_session: null, session_history: [], invoices: [] })
+      const path = String(input)
+      if (path.endsWith('/auth/me')) return json(user)
+      if (path.endsWith('/user/dashboard')) { attempts += 1; return attempts === 1 ? json({ detail: 'error' }, 500) : json({ current_session: null, session_history: [], invoices: [] }) }
+      return json([])
     })
     show('/user')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar o dashboard.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar os dados operacionais.')
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
     await waitFor(() => expect(screen.getByText('Nenhuma recarga em andamento.')).toBeInTheDocument())
   })

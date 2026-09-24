@@ -120,5 +120,25 @@ a { color: inherit; text-decoration: none; }
 .dashboard table { width: 100%; border-collapse: collapse; text-align: left; }
 .dashboard th, .dashboard td { padding: .7rem; border-bottom: 1px solid #275343; white-space: nowrap; }
 .dashboard [role="alert"] { color: #ffb2a9; }
+.section-heading, .vehicle-list li, .row-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.section-heading h2 { margin-bottom: 0; }
+.vehicle-list { list-style: none; padding: 0; margin: 0 0 1.5rem; }
+.vehicle-list li { padding: 1rem 0; border-bottom: 1px solid #275343; }
+.vehicle-list li > div:first-child { display: grid; gap: .3rem; }
+.vehicle-list span, .field-help { color: #a9c7ba; font-size: .88rem; }
+.vehicle-form, .session-form { display: grid; gap: 1rem; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid #275343; }
+.vehicle-form h3 { margin: 0; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.vehicle-form label, .session-form label { display: grid; gap: .4rem; color: #cce4da; }
+.dashboard input { width: 100%; padding: .7rem 1rem; border-radius: .55rem; border: 1px solid #47705d; color: #e8f5ef; background: #071713; }
+.session-form { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; }
+.row-actions { justify-content: flex-start; }
+.dashboard .secondary-button { background: transparent; color: #e8f5ef; }
+.dashboard .danger-button { background: #ff9f96; color: #32100d; }
+.operation-notice { padding: 1rem; border: 1px solid #275343; border-radius: .75rem; background: #0c271e; }
+.operation-notice--success { color: #74eab8; }
+.operation-notice--error { color: #ffb2a9; }
+.stop-panel { border-color: #78443f; }
 @media (max-width: 900px) { .kpi-grid, .prediction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 650px) { .dashboard { padding: 1rem; } .chart-grid, .kpi-grid, .prediction-grid { grid-template-columns: 1fr; } .prediction-recommendation { grid-column: auto; } }
+@media (max-width: 900px) { .session-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .dashboard { padding: 1rem; } .chart-grid, .kpi-grid, .prediction-grid, .form-grid, .session-form { grid-template-columns: 1fr; } .prediction-recommendation { grid-column: auto; } .vehicle-list li { align-items: flex-start; } }
