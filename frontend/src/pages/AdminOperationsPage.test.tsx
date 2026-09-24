@@ -10,7 +10,7 @@ const user = { ...admin, id: 'u1', role: 'USER' }
 const station = { id: 's1', name: 'Central', description: 'Matriz', grid_limit_kw: 60, station_peak_solar_kw: 20, is_active: true }
 const charger = { id: 'c1', station_id: 's1', name: 'Carga 1', code: 'CG-01', max_power_kw: 22, status: 'AVAILABLE', is_active: true }
 const tariff = { id: 't1', name: 'Padrão', price_per_kwh: '0.9200', currency: 'BRL', is_active: true, valid_from: '2026-09-01T00:00:00Z', valid_until: null, created_at: '' }
-const configuration = { id: 'cfg1', simulation_speed: 60, grid_emission_factor_kg_per_kwh: 0.084, high_demand_threshold: 0.85, medium_peak_threshold: 0.7, high_peak_threshold: 0.9, created_at: '', updated_at: '' }
+const configuration = { id: 'cfg1', simulation_speed: 60, grid_emission_factor_kg_per_kwh: 0.084, high_demand_threshold: 0.85, high_solar_availability_threshold: 0.8, medium_peak_threshold: 0.7, high_peak_threshold: 0.9, created_at: '', updated_at: '' }
 const simulation = { state: 'STOPPED', current_instant: '2026-09-23T12:00:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null }
 
 function mockApi(role: 'ADMIN' | 'USER' = 'ADMIN') {
@@ -45,7 +45,7 @@ describe('admin operations authorization and rendering', () => {
     expect(screen.getAllByText('Central').length).toBeGreaterThan(0)
     expect(screen.getByText('Carga 1 (CG-01)')).toBeInTheDocument()
     expect(screen.getByText('Padrão')).toBeInTheDocument()
-    expect(screen.getByText(/A classificação permanece calculada pelo backend/)).toBeInTheDocument()
+    expect(screen.getByText(/classificação de risco permanece calculada pelo backend/i)).toBeInTheDocument()
   })
 
   it('validates risk threshold ordering before calling the API', async () => {

@@ -40,6 +40,9 @@ class SystemConfigurationValues(BaseModel):
     simulation_speed: int = Field(gt=0)
     grid_emission_factor_kg_per_kwh: float = Field(ge=0, allow_inf_nan=False)
     high_demand_threshold: float = Field(gt=0, le=1, allow_inf_nan=False)
+    high_solar_availability_threshold: float = Field(
+        default=0.8, gt=0, le=1, allow_inf_nan=False
+    )
     medium_peak_threshold: float = Field(gt=0, lt=1, allow_inf_nan=False)
     high_peak_threshold: float = Field(gt=0, le=1, allow_inf_nan=False)
 
@@ -60,6 +63,9 @@ class SystemConfigurationUpdate(BaseModel):
         default=None, ge=0, allow_inf_nan=False
     )
     high_demand_threshold: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    high_solar_availability_threshold: float | None = Field(
+        default=None, gt=0, le=1, allow_inf_nan=False
+    )
     medium_peak_threshold: float | None = Field(default=None, gt=0, lt=1, allow_inf_nan=False)
     high_peak_threshold: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
 

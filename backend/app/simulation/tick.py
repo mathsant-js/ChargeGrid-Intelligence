@@ -76,6 +76,11 @@ def execute_tick(
             high_demand_threshold = (
                 configuration.high_demand_threshold if configuration is not None else 0.85
             )
+            high_solar_threshold = (
+                configuration.high_solar_availability_threshold
+                if configuration is not None
+                else None
+            )
             rows = db.execute(
                 select(ChargingSession, Charger, Vehicle, ChargingStation)
                 .join(Charger, ChargingSession.charger_id == Charger.id)
@@ -168,6 +173,17 @@ def execute_tick(
                         )
                         or 0.0
                     )
+                previous_solar_available = 0.0
+                if previous_station_tick is not None:
+                    previous_solar_available = (
+                        db.scalar(
+                            select(SolarReading.available_power_kw).where(
+                                SolarReading.station_id == station_id,
+                                SolarReading.timestamp == previous_timestamp,
+                            )
+                        )
+                        or 0.0
+                    )
                 if (
                     grid_total / station.grid_limit_kw >= high_demand_threshold
                     and previous_grid_power / station.grid_limit_kw < high_demand_threshold
@@ -181,6 +197,27 @@ def execute_tick(
                             message=(
                                 f"Grid import reached {grid_total:.2f} kW of the "
                                 f"{station.grid_limit_kw:.2f} kW station limit."
+                            ),
+                            created_at=timestamp,
+                        )
+                    )
+                if (
+                    high_solar_threshold is not None
+                    and station.station_peak_solar_kw > 0
+                    and solar_available / station.station_peak_solar_kw >= high_solar_threshold
+                    and previous_solar_available / station.station_peak_solar_kw
+                    < high_solar_threshold
+                ):
+                    db.add(
+                        Alert(
+                            station_id=station_id,
+                            type=AlertType.HIGH_SOLAR_AVAILABILITY,
+                            severity=AlertSeverity.INFO,
+                            title="High solar availability",
+                            message=(
+                                f"Solar generation reached {solar_available:.2f} kW "
+                                f"({solar_available / station.station_peak_solar_kw:.0%} "
+                                "of configured station peak)."
                             ),
                             created_at=timestamp,
                         )

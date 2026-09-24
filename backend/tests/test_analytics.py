@@ -5,11 +5,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.security import hash_password
 from app.models.billing import Invoice, InvoiceStatus
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading
 from app.models.infrastructure import Charger, ChargingStation
+from app.models.prediction import SystemConfiguration
 from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
 from app.services.analytics import AnalyticsFilters, dashboard, sustainability
@@ -29,7 +29,14 @@ def seed(db: Session) -> tuple[User, User, ChargingStation, ChargingSession, Cha
         role=UserRole.USER,
     )
     station = ChargingStation(name="One", grid_limit_kw=60)
-    db.add_all([first, second, station])
+    db.add_all([first, second, station, SystemConfiguration(
+        simulation_speed=60,
+        grid_emission_factor_kg_per_kwh=0.4,
+        high_demand_threshold=0.85,
+        high_solar_availability_threshold=0.8,
+        medium_peak_threshold=0.7,
+        high_peak_threshold=0.9,
+    )])
     db.flush()
     charger_a = Charger(station_id=station.id, name="A", code="A", max_power_kw=22)
     charger_b = Charger(station_id=station.id, name="B", code="B", max_power_kw=22)
@@ -181,6 +188,10 @@ async def test_analytics_api_scope_filters_and_validation(
     assert (await client.get(f"{base}/sustainability", headers=headers)).json()[
         "solar_percentage"
     ] == 25
+    report = (await client.get(f"{base}/sustainability", headers=headers)).json()
+    assert report["grid_emission_factor_kg_per_kwh"] == 0.4
+    assert report["avoided_co2_kg"] == 2
+    assert report["estimated_solar_savings"] == "4.60"
     for endpoint in ("dashboard", "sustainability"):
         assert (
             await client.get(
@@ -215,8 +226,10 @@ async def test_analytics_api_scope_filters_and_validation(
     assert (await client.get(f"{base}/dashboard")).status_code == 401
 
 
-def test_emission_factor_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRID_EMISSION_FACTOR_KG_PER_KWH", "0.45")
-    get_settings.cache_clear()
-    assert get_settings().grid_emission_factor_kg_per_kwh == 0.45
-    get_settings.cache_clear()
+@pytest.mark.anyio
+async def test_sustainability_requires_identified_esg_configuration(
+    client: AsyncClient,
+) -> None:
+    response = await client.get("/api/v1/analytics/sustainability")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "ESG configuration unavailable"

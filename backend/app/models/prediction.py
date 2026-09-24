@@ -68,6 +68,11 @@ class SystemConfiguration(TimestampMixin, Base):
             name="ck_config_high_demand_range",
         ),
         CheckConstraint(
+            "high_solar_availability_threshold > 0 "
+            "AND high_solar_availability_threshold <= 1",
+            name="ck_config_high_solar_availability_range",
+        ),
+        CheckConstraint(
             "medium_peak_threshold > 0 AND medium_peak_threshold < high_peak_threshold "
             "AND high_peak_threshold <= 1",
             name="ck_config_peak_threshold_order",
@@ -79,5 +84,8 @@ class SystemConfiguration(TimestampMixin, Base):
     simulation_speed: Mapped[int] = mapped_column(Integer, nullable=False)
     grid_emission_factor_kg_per_kwh: Mapped[float] = mapped_column(Float, nullable=False)
     high_demand_threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    high_solar_availability_threshold: Mapped[float] = mapped_column(
+        Float, default=0.8, nullable=False
+    )
     medium_peak_threshold: Mapped[float] = mapped_column(Float, nullable=False)
     high_peak_threshold: Mapped[float] = mapped_column(Float, nullable=False)

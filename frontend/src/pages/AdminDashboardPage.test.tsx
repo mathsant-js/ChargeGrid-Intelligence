@@ -11,7 +11,7 @@ const session = { id: 'se1', user_id: 'u1', charger_id: 'c1', status: 'CHARGING'
 const reading = { id: 'r1', session_id: 'se1', timestamp: '2026-09-17T12:00:00Z', allocated_power_kw: 20, solar_power_kw: 8, grid_power_kw: 12 }
 const alert = { id: 'a1', station_id: 's1', title: 'Demanda elevada', message: 'Verifique a rede', severity: 'WARNING', type: 'HIGH_DEMAND', created_at: '2026-09-17T12:00:00Z', acknowledged_at: null }
 const summary = { session_count: 1, completed_session_count: 0, energy_consumed_kwh: 5, billed_total: '0.00' }
-const sustainability = { solar_energy_kwh: 2, avoided_co2_kg: 0.8 }
+const sustainability = { station_id: null, user_id: null, energy_consumed_kwh: 5, solar_energy_kwh: 2, grid_energy_kwh: 3, solar_percentage: 40, avoided_co2_kg: 0.8, grid_emission_factor_kg_per_kwh: 0.4, estimated_solar_savings: '1.84', currency: 'BRL' }
 const prediction: DemandPrediction = { id: 'p1', station_id: 's1', generated_at: new Date().toISOString(), prediction_for: new Date(Date.now() + 3600000).toISOString(), predicted_demand_kw: 54, capacity_kw: 60, risk_level: 'HIGH', prediction_horizon_minutes: 60, model_version: 'rf-2026.09', recommendation: 'Monitore novas sessões.' }
 
 type MockOptions = { prediction?: DemandPrediction | null; predictionFailure?: number | 'network'; runResult?: DemandPrediction; runFailure?: number | 'network'; stationList?: typeof stations }
@@ -103,6 +103,13 @@ describe('admin dashboard prediction', () => {
 })
 
 describe('admin dashboard operations', () => {
+  it('shows the complete filtered ESG report and identifies theoretical savings', async () => {
+    mockApi({ prediction }); show()
+    expect(await screen.findByRole('heading', { name: 'Relatório de sustentabilidade' })).toBeInTheDocument()
+    for (const label of ['Energia total', 'Energia solar', 'Energia da rede', 'Participação solar', 'CO₂ evitado', 'Fator de emissão', 'Economia estimada']) expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Economia estimada teórica/)).toBeInTheDocument()
+  })
+
   it('applies period filters and acknowledges alerts through the API', async () => {
     const fetch = mockApi({ prediction }); show()
     await screen.findByText('54 kW')

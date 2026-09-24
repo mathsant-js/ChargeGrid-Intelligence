@@ -3,10 +3,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import select
 
 from app.api.dependencies import CurrentUser
 from app.api.routes.common import NOT_FOUND_RESPONSE, UNAUTHORIZED_RESPONSE, DbSession
-from app.core.config import get_settings
+from app.models.prediction import SystemConfiguration
 from app.models.user import UserRole
 from app.schemas.analytics import DashboardResponse, SustainabilityResponse
 from app.services.analytics import AnalyticsFilters, dashboard, sustainability
@@ -75,10 +76,13 @@ async def get_sustainability(
     station_id: UUID | None = None,
     user_id: UUID | None = None,
 ) -> SustainabilityResponse:
+    configuration = db.scalar(select(SystemConfiguration).limit(1))
+    if configuration is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "ESG configuration unavailable")
     return sustainability(
         db,
         filters_for_user(
             current_user.id, current_user.role, station_id, user_id, date_from, date_to
         ),
-        get_settings().grid_emission_factor_kg_per_kwh,
+        configuration.grid_emission_factor_kg_per_kwh,
     )

@@ -40,6 +40,14 @@ class FixedResolver:
         return {request.session_id: self.powers[request.session_id] for request in sessions}
 
 
+class FixedSolarProvider:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def solar_available_kw(self, timestamp: datetime, station_peak_solar_kw: float) -> float:
+        return self.value
+
+
 def clock() -> SimulationClock:
     value = SimulationClock(initial_instant=INSTANT)
     value.start()
@@ -105,11 +113,45 @@ def configured_threshold(db: Session, threshold: float) -> None:
             simulation_speed=60,
             grid_emission_factor_kg_per_kwh=0.1,
             high_demand_threshold=threshold,
+            high_solar_availability_threshold=0.8,
             medium_peak_threshold=0.7,
             high_peak_threshold=0.9,
         )
     )
     db.commit()
+
+
+def alerts_of_type(db: Session, alert_type: AlertType) -> list[Alert]:
+    return list(db.scalars(select(Alert).where(Alert.type == alert_type)))
+
+
+def test_high_solar_alert_is_configurable_and_deduplicated_by_episode(
+    db_session: Session,
+) -> None:
+    station, session = add_session(db_session)
+    configured_threshold(db_session, 0.9)
+    configuration = db_session.scalar(select(SystemConfiguration))
+    assert configuration is not None
+    configuration.high_solar_availability_threshold = 0.8
+    db_session.commit()
+    resolver = FixedResolver({session.id: PowerBreakdown(7, 7, 0)})
+    solar = FixedSolarProvider(8)
+    tick_clock = clock()
+
+    execute_tick(db_session, clock=tick_clock, solar_provider=solar, power_resolver=resolver)
+    assert len(alerts_of_type(db_session, AlertType.HIGH_SOLAR_AVAILABILITY)) == 1
+    db_session.rollback()
+    execute_tick(db_session, clock=tick_clock, solar_provider=solar, power_resolver=resolver)
+    assert len(alerts_of_type(db_session, AlertType.HIGH_SOLAR_AVAILABILITY)) == 1
+
+    db_session.rollback()
+    solar.value = 7
+    execute_tick(db_session, clock=tick_clock, solar_provider=solar, power_resolver=resolver)
+    assert len(alerts_of_type(db_session, AlertType.HIGH_SOLAR_AVAILABILITY)) == 1
+    db_session.rollback()
+    solar.value = 8
+    execute_tick(db_session, clock=tick_clock, solar_provider=solar, power_resolver=resolver)
+    assert len(alerts_of_type(db_session, AlertType.HIGH_SOLAR_AVAILABILITY)) == 2
 
 
 def test_high_demand_threshold_and_new_episode(db_session: Session) -> None:

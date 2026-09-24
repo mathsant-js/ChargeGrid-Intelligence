@@ -20,7 +20,7 @@ export interface Charger { id: string; station_id: string; name: string; code: s
 export interface ChargerInput { station_id: string; name: string; code: string; max_power_kw: number; status: Charger['status']; is_active: boolean }
 export interface Tariff { id: string; name: string; price_per_kwh: string; currency: string; is_active: boolean; valid_from: string; valid_until: string | null; created_at: string }
 export interface TariffInput { name: string; price_per_kwh: number; currency: string; is_active: boolean; valid_from: string; valid_until: string | null }
-export interface SystemConfiguration { id: string; simulation_speed: number; grid_emission_factor_kg_per_kwh: number; high_demand_threshold: number; medium_peak_threshold: number; high_peak_threshold: number; created_at: string; updated_at: string }
+export interface SystemConfiguration { id: string; simulation_speed: number; grid_emission_factor_kg_per_kwh: number; high_demand_threshold: number; high_solar_availability_threshold: number; medium_peak_threshold: number; high_peak_threshold: number; created_at: string; updated_at: string }
 export type SystemConfigurationInput = Omit<SystemConfiguration, 'id' | 'created_at' | 'updated_at'>
 export interface SimulationStatus { state: 'RUNNING' | 'STOPPED'; current_instant: string; tick_duration_seconds: number; simulation_speed: number; last_tick: string | null }
 export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }

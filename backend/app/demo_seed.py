@@ -80,6 +80,7 @@ def seed(db: Session, admin_password: str, user_password: str) -> None:
         db.add(SystemConfiguration(simulation_speed=60,
                                    grid_emission_factor_kg_per_kwh=EMISSION_FACTOR,
                                    high_demand_threshold=0.85,
+                                   high_solar_availability_threshold=0.8,
                                    medium_peak_threshold=0.7, high_peak_threshold=0.9))
     elif config.grid_emission_factor_kg_per_kwh != EMISSION_FACTOR or config.simulation_speed != 60:
         raise ValueError("Existing system configuration conflicts with demo")
