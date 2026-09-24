@@ -78,6 +78,9 @@ async def test_system_configuration_and_prediction_creation_require_admin(
     assert (
         await client.post("/api/v1/predictions/demand", headers=headers, json={})
     ).status_code == 403
+    assert (
+        await client.post("/api/v1/predictions/demand/run", headers=headers, json={})
+    ).status_code == 403
 
 
 @pytest.mark.anyio

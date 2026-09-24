@@ -29,6 +29,11 @@ class DemandPredictionResponse(BaseModel):
     risk_level: DemandRiskLevel
     model_version: str
     prediction_horizon_minutes: int
+    recommendation: str
+
+
+class DemandPredictionRun(BaseModel):
+    station_id: UUID
 
 
 class SystemConfigurationValues(BaseModel):

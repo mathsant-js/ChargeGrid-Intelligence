@@ -25,6 +25,7 @@ async def test_openapi_is_available() -> None:
     assert "/api/v1/solar/current" in paths
     assert "/api/v1/solar/history" in paths
     assert "/api/v1/predictions/demand" in paths
+    assert "/api/v1/predictions/demand/run" in paths
     assert "/api/v1/system-configuration" in paths
     assert "/api/v1/billing/invoices" in paths
     assert "/api/v1/billing/invoices/{invoice_id}" in paths
@@ -61,6 +62,7 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/solar/history", "get"),
         ("/api/v1/predictions/demand", "get"),
         ("/api/v1/predictions/demand", "post"),
+        ("/api/v1/predictions/demand/run", "post"),
         ("/api/v1/system-configuration", "get"),
         ("/api/v1/system-configuration", "post"),
         ("/api/v1/system-configuration", "patch"),
@@ -103,6 +105,7 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/solar/history", "get"): {"401"},
         ("/api/v1/predictions/demand", "get"): {"401", "404"},
         ("/api/v1/predictions/demand", "post"): {"401", "403", "404"},
+        ("/api/v1/predictions/demand/run", "post"): {"401", "403", "404", "422", "503"},
         ("/api/v1/system-configuration", "get"): {"401", "403", "404"},
         ("/api/v1/system-configuration", "post"): {"401", "403", "409"},
         ("/api/v1/system-configuration", "patch"): {"401", "403", "404"},

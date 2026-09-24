@@ -105,6 +105,7 @@ python3 scripts/sprint3_demo.py
 - [Fase 5 — Billing e histórico de invoices (concluída)](docs/PHASE_5.md)
 - [Fase 6 — Contratos da API de analytics](docs/PHASE_6_ANALYTICS.md)
 - [Fase 6 — Integração e limites](docs/PHASE_6.md)
+- [Fase 7 — ML, treinamento e inferência](docs/PHASE_7.md)
 
 ## Estado atual
 
@@ -157,7 +158,11 @@ atualização das respostas dos dashboards. Os gráficos do gestor somam leitura
 simultâneas para mostrar a demanda total de cada tick. Veja os resultados e
 limites em [docs/PHASE_6.md](docs/PHASE_6.md).
 
-A Fase 6 ainda não está concluída: o KPI obrigatório de risco de pico depende
-de uma previsão futura válida, e o fluxo automático de previsão/classificação
-da Fase 7 ainda não existe. Sem esses dados, a tela mostra um estado
-informativo. O simulador também depende de ticks manuais pela API; a Sprint 3 fornece seed e roteiro reproduzíveis para a demonstração completa.
+A Fase 7 disponibiliza inferência administrativa explícita em
+`POST /api/v1/predictions/demand/run`. Ela carrega o artefato configurado em
+`DEMAND_MODEL_PATH`, monta features apenas com leituras já disponíveis,
+persiste a previsão de 60 minutos, classifica o risco com os thresholds de
+`SystemConfiguration` e cria `PEAK_RISK` uma vez por episódio `HIGH`. A
+previsão é estritamente consultiva e não altera a alocação energética. Consulte
+[docs/PHASE_7.md](docs/PHASE_7.md) para preparo do modelo, pré-condições e
+respostas de erro. O simulador continua dependendo de ticks manuais pela API.

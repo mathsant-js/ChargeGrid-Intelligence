@@ -48,6 +48,13 @@ class DemandPrediction(Base):
             prediction_for = prediction_for.replace(tzinfo=UTC)
         return round((prediction_for - generated_at).total_seconds() / 60)
 
+    @property
+    def recommendation(self) -> str:
+        # Imported lazily to keep the ORM model free from service initialization.
+        from app.services.demand_predictions import recommendation_for
+
+        return recommendation_for(self.risk_level)
+
 
 class SystemConfiguration(TimestampMixin, Base):
     __tablename__ = "system_configurations"

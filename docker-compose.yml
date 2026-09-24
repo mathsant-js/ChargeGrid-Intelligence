@@ -27,6 +27,7 @@ services:
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       GRID_EMISSION_FACTOR_KG_PER_KWH: ${GRID_EMISSION_FACTOR_KG_PER_KWH:-0.0}
+      DEMAND_MODEL_PATH: ${DEMAND_MODEL_PATH:-../data/models/demand_forecast.joblib}
       DEMO_SIMULATION_START_UTC: ${DEMO_SIMULATION_START_UTC:-}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     healthcheck:
@@ -42,6 +43,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./data:/data
 
   frontend:
     build:

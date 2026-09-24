@@ -3,6 +3,8 @@ const TOKEN_KEY = 'chargegrid.access_token'
 
 export type Role = 'ADMIN' | 'USER'
 export interface User { id: string; name: string; email: string; role: Role; is_active: boolean; created_at: string; updated_at: string }
+export interface Vehicle { id: string; user_id: string; name: string; brand: string; model: string; license_plate: string; max_charge_power_kw: number; created_at: string; updated_at: string }
+export interface VehicleInput { name: string; brand: string; model: string; license_plate: string; max_charge_power_kw: number }
 export interface TokenResponse { access_token: string; token_type: 'bearer' }
 export interface ChargingSession { id: string; user_id: string; vehicle_id: string; charger_id: string; status: 'CREATED' | 'CHARGING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED'; started_at: string | null; ended_at: string | null; requested_power_kw: number; allocated_power_kw: number; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; tariff_per_kwh: string; total_cost: string; created_at: string; updated_at: string }
 export interface EnergyReading { id: string; session_id: string; timestamp: string; requested_power_kw: number; allocated_power_kw: number; solar_power_kw: number; grid_power_kw: number; interval_energy_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number }
@@ -13,9 +15,9 @@ export interface Dashboard { station_id: string | null; user_id: string | null; 
 export interface Sustainability { station_id: string | null; user_id: string | null; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; solar_percentage: number; avoided_co2_kg: number; grid_emission_factor_kg_per_kwh: number; estimated_solar_savings: string; currency: string }
 export interface Filters { station_id?: string; user_id?: string; from?: string; to?: string }
 export interface Station { id: string; name: string; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
-export interface Charger { id: string; station_id: string; name: string; status: 'AVAILABLE' | 'CHARGING' | 'UNAVAILABLE'; is_active: boolean }
+export interface Charger { id: string; station_id: string; name: string; code: string; max_power_kw: number; status: 'AVAILABLE' | 'CHARGING' | 'UNAVAILABLE'; is_active: boolean }
 export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }
-export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string }
+export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string; recommendation: string }
 export interface Alert { id: string; station_id: string; type: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; title: string; message: string; created_at: string; acknowledged_at: string | null }
 
 export class ApiError extends Error {
@@ -48,6 +50,7 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
     const detail = typeof body === 'object' && body !== null && 'detail' in body && typeof body.detail === 'string' ? body.detail : undefined
     throw new ApiError(response.status, response.status === 403 ? 'Acesso não permitido.' : detail ?? `Erro HTTP ${response.status}`)
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -56,6 +59,10 @@ export const api = {
   me: () => request<User>('/auth/me'),
   sessions: () => request<ChargingSession[]>('/sessions'),
   userDashboard: () => request<UserDashboard>('/user/dashboard'),
+  vehicles: () => request<Vehicle[]>('/vehicles'),
+  createVehicle: (vehicle: VehicleInput) => request<Vehicle>('/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
+  updateVehicle: (id: string, vehicle: VehicleInput) => request<Vehicle>(`/vehicles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(vehicle) }),
+  deleteVehicle: (id: string) => request<void>(`/vehicles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   session: (id: string) => request<ChargingSession>(`/sessions/${encodeURIComponent(id)}`),
   startSession: (vehicle_id: string, charger_id: string) => request<ChargingSession>('/sessions/start', { method: 'POST', body: JSON.stringify({ vehicle_id, charger_id }) }),
   stopSession: (id: string) => request<ChargingSession>(`/sessions/${encodeURIComponent(id)}/stop`, { method: 'POST' }),
@@ -69,6 +76,7 @@ export const api = {
   chargers: () => request<Charger[]>('/chargers'),
   solarHistory: (filters?: Filters) => request<SolarReading[]>(`/solar/history${query(filters)}`),
   prediction: (station_id: string) => request<DemandPrediction>(`/predictions/demand${query({ station_id })}`),
+  runPrediction: (station_id: string) => request<DemandPrediction>('/predictions/demand/run', { method: 'POST', body: JSON.stringify({ station_id }) }),
   alerts: (station_id?: string) => request<Alert[]>(`/alerts${query({ station_id })}`),
   acknowledgeAlert: (id: string) => request<Alert>(`/alerts/${encodeURIComponent(id)}/acknowledge`, { method: 'PATCH' }),
 }
