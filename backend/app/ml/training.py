@@ -1,6 +1,7 @@
-"""Train, evaluate, persist, and load the Phase 7 demand model."""
+"""Compare, select, persist, and load simple demand forecasters."""
 
 import logging
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -10,14 +11,17 @@ from typing import Any, Protocol, cast
 import joblib
 import pandas as pd
 import sklearn
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import (
+    ExtraTreesRegressor,
+    HistGradientBoostingRegressor,
+    RandomForestRegressor,
+)
 
 from app.ml.baseline import RegressionMetrics, chronological_split, regression_metrics
 from app.ml.dataset import DemandDatasetRow
 
 logger = logging.getLogger(__name__)
-
-MODEL_VERSION = "1.0.0"
+MODEL_VERSION = "2.0.0"
 MODEL_FEATURES = (
     "hour",
     "day_of_week",
@@ -28,19 +32,21 @@ MODEL_FEATURES = (
     "solar_available_kw",
 )
 TARGET_COLUMN = "demand_kw_next_60_minutes"
-ARTIFACT_FORMAT_VERSION = 2
+ARTIFACT_FORMAT_VERSION = 3
+SELECTION_METRIC = "rmse"
+BASELINE_NAME = "HistoricalMeanBaseline"
 
 
 class ModelArtifactError(RuntimeError):
-    """Base error for model artifact failures."""
+    pass
 
 
 class ModelArtifactNotFoundError(ModelArtifactError):
-    """Raised when the configured model artifact does not exist."""
+    pass
 
 
 class IncompatibleModelArtifactError(ModelArtifactError):
-    """Raised when artifact features or structure are incompatible."""
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,59 +64,99 @@ class ModelMetadata:
     algorithm: str
     features: tuple[str, ...]
     target: str
+    forecast_horizon_minutes: int
+    random_state: int
     training_period: TrainingPeriod
     test_period: TrainingPeriod
     metrics: RegressionMetrics
+    candidate_metrics: dict[str, RegressionMetrics]
+    selection_metric: str
 
 
 @dataclass(frozen=True, slots=True)
 class ModelComparison:
-    model: RegressionMetrics
-    baseline: RegressionMetrics
-    mae_improvement: float
-    rmse_improvement: float
-    r2_improvement: float
+    candidates: dict[str, RegressionMetrics]
     winner: str
     selection_metric: str
+    baseline_won: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentEvaluation:
+    by_hour: dict[str, RegressionMetrics]
+    by_demand_band: dict[str, RegressionMetrics]
 
 
 @dataclass(frozen=True, slots=True)
 class TrainingResult:
     metadata: ModelMetadata
     comparison: ModelComparison
+    segments: SegmentEvaluation
 
 
 class DemandFeatureRow(Protocol):
     @property
     def hour(self) -> int: ...
-
     @property
     def day_of_week(self) -> int: ...
-
     @property
     def is_weekend(self) -> bool: ...
-
     @property
     def active_sessions(self) -> int: ...
-
     @property
     def current_demand_kw(self) -> float: ...
-
     @property
     def historical_avg_demand_kw(self) -> float: ...
-
     @property
     def solar_available_kw(self) -> float: ...
 
 
+@dataclass
+class HistoricalMeanBaseline:
+    """Persistable implementation of the SPEC hour/day historical baseline."""
+
+    averages: dict[tuple[int, int], float]
+    global_average: float
+    n_features_in_: int = len(MODEL_FEATURES)
+
+    @classmethod
+    def fit(cls, rows: Sequence[DemandDatasetRow]) -> "HistoricalMeanBaseline":
+        totals: defaultdict[tuple[int, int], float] = defaultdict(float)
+        counts: defaultdict[tuple[int, int], int] = defaultdict(int)
+        for row in rows:
+            key = (row.day_of_week, row.hour)
+            totals[key] += row.demand_kw_next_60_minutes
+            counts[key] += 1
+        return cls(
+            {key: totals[key] / count for key, count in counts.items()},
+            sum(row.demand_kw_next_60_minutes for row in rows) / len(rows),
+        )
+
+    def predict(self, frame: pd.DataFrame) -> list[float]:
+        return [
+            self.averages.get((int(row.day_of_week), int(row.hour)), self.global_average)
+            for row in frame.itertuples(index=False)
+        ]
+
+
+type SupportedModel = (
+    HistoricalMeanBaseline
+    | RandomForestRegressor
+    | ExtraTreesRegressor
+    | HistGradientBoostingRegressor
+)
+
+
 @dataclass(frozen=True, slots=True)
 class LoadedDemandModel:
-    model: RandomForestRegressor
+    model: SupportedModel
     metadata: ModelMetadata
 
     def predict(self, rows: Sequence[DemandFeatureRow]) -> list[float]:
-        frame = _feature_frame(rows, self.metadata.features)
-        return [float(value) for value in self.model.predict(frame)]
+        return [
+            max(0.0, float(value))
+            for value in self.model.predict(_feature_frame(rows, self.metadata.features))
+        ]
 
 
 def _feature_frame(
@@ -126,6 +172,51 @@ def _period(rows: Sequence[DemandDatasetRow]) -> TrainingPeriod:
     return TrainingPeriod(start=rows[0].timestamp, end=rows[-1].timestamp, rows=len(rows))
 
 
+def _candidate_models(random_state: int, n_estimators: int) -> dict[str, SupportedModel]:
+    return {
+        "RandomForestRegressor": RandomForestRegressor(
+            n_estimators=n_estimators,
+            min_samples_leaf=8,
+            max_features=0.8,
+            random_state=random_state,
+            n_jobs=1,
+        ),
+        "ExtraTreesRegressor": ExtraTreesRegressor(
+            n_estimators=n_estimators,
+            min_samples_leaf=8,
+            max_features=0.8,
+            random_state=random_state,
+            n_jobs=1,
+        ),
+        "HistGradientBoostingRegressor": HistGradientBoostingRegressor(
+            max_iter=min(n_estimators, 120),
+            max_leaf_nodes=15,
+            l2_regularization=1.0,
+            random_state=random_state,
+        ),
+    }
+
+
+def _segment_metrics(
+    test: Sequence[DemandDatasetRow], predictions: Sequence[float]
+) -> SegmentEvaluation:
+    hour_groups: defaultdict[str, list[tuple[float, float]]] = defaultdict(list)
+    band_groups: defaultdict[str, list[tuple[float, float]]] = defaultdict(list)
+    for row, predicted in zip(test, predictions, strict=True):
+        actual = row.demand_kw_next_60_minutes
+        hour_groups[f"{row.hour:02d}:00"].append((actual, predicted))
+        band = "low_<50kw" if actual < 50 else "medium_50-100kw" if actual < 100 else "high_>=100kw"
+        band_groups[band].append((actual, predicted))
+
+    def calculate(groups: dict[str, list[tuple[float, float]]]) -> dict[str, RegressionMetrics]:
+        return {
+            name: regression_metrics([pair[0] for pair in pairs], [pair[1] for pair in pairs])
+            for name, pairs in groups.items()
+        }
+
+    return SegmentEvaluation(calculate(hour_groups), calculate(band_groups))
+
+
 def train_and_evaluate(
     rows: Sequence[DemandDatasetRow],
     *,
@@ -133,64 +224,50 @@ def train_and_evaluate(
     artifact_path: Path,
     test_fraction: float = 0.2,
     random_state: int = 42,
-    n_estimators: int = 200,
+    n_estimators: int = 120,
 ) -> TrainingResult:
-    """Train only on the chronological training window and persist a Joblib bundle."""
+    """Evaluate one baseline plus three fixed classical candidates and persist the winner."""
 
     train, test = chronological_split(rows, test_fraction)
-    logger.info(
-        "Starting demand model training: version=%s algorithm=RandomForestRegressor "
-        "train_rows=%d test_rows=%d train_start=%s train_end=%s",
-        MODEL_VERSION,
-        len(train),
-        len(test),
-        train[0].timestamp.isoformat(),
-        train[-1].timestamp.isoformat(),
-    )
-    model = RandomForestRegressor(
-        n_estimators=n_estimators,
-        random_state=random_state,
-        n_jobs=-1,
-    )
-    model.fit(
-        _feature_frame(train),
-        [row.demand_kw_next_60_minutes for row in train],
-    )
-    predictions = model.predict(_feature_frame(test))
-    metrics = regression_metrics(
-        [row.demand_kw_next_60_minutes for row in test],
-        [float(value) for value in predictions],
-    )
+    x_train, x_test = _feature_frame(train), _feature_frame(test)
+    y_train = [row.demand_kw_next_60_minutes for row in train]
+    y_test = [row.demand_kw_next_60_minutes for row in test]
+    models: dict[str, Any] = {BASELINE_NAME: HistoricalMeanBaseline.fit(train)}
+    models.update(_candidate_models(random_state, n_estimators))
+    metrics_by_name: dict[str, RegressionMetrics] = {}
+    predictions_by_name: dict[str, list[float]] = {}
+    for name, model in models.items():
+        if name != BASELINE_NAME:
+            model.fit(x_train, y_train)
+        predictions = [float(value) for value in model.predict(x_test)]
+        predictions_by_name[name] = predictions
+        metrics_by_name[name] = regression_metrics(y_test, predictions)
+    if metrics_by_name[BASELINE_NAME] != baseline_metrics:
+        raise ValueError("baseline metrics must use the same chronological split")
+    winner = min(metrics_by_name, key=lambda name: metrics_by_name[name].rmse)
     metadata = ModelMetadata(
         artifact_format_version=ARTIFACT_FORMAT_VERSION,
         sklearn_version=sklearn.__version__,
         model_version=MODEL_VERSION,
-        algorithm="RandomForestRegressor",
+        algorithm=winner,
         features=MODEL_FEATURES,
         target=TARGET_COLUMN,
+        forecast_horizon_minutes=60,
+        random_state=random_state,
         training_period=_period(train),
         test_period=_period(test),
-        metrics=metrics,
+        metrics=metrics_by_name[winner],
+        candidate_metrics=metrics_by_name,
+        selection_metric=SELECTION_METRIC,
     )
-    comparison = ModelComparison(
-        model=metrics,
-        baseline=baseline_metrics,
-        mae_improvement=baseline_metrics.mae - metrics.mae,
-        rmse_improvement=baseline_metrics.rmse - metrics.rmse,
-        r2_improvement=metrics.r2 - baseline_metrics.r2,
-        winner="model" if metrics.rmse < baseline_metrics.rmse else "baseline",
-        selection_metric="rmse",
-    )
+    comparison = ModelComparison(metrics_by_name, winner, SELECTION_METRIC, winner == BASELINE_NAME)
+    segments = _segment_metrics(test, predictions_by_name[winner])
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "metadata": asdict(metadata)}, artifact_path)
+    joblib.dump({"model": models[winner], "metadata": asdict(metadata)}, artifact_path)
     logger.info(
-        "Demand model training completed: version=%s mae=%.6f rmse=%.6f r2=%.6f",
-        MODEL_VERSION,
-        metrics.mae,
-        metrics.rmse,
-        metrics.r2,
+        "Demand model selection completed: winner=%s rmse=%.6f", winner, metadata.metrics.rmse
     )
-    return TrainingResult(metadata=metadata, comparison=comparison)
+    return TrainingResult(metadata, comparison, segments)
 
 
 def _metadata_from_dict(value: object) -> ModelMetadata:
@@ -205,21 +282,24 @@ def _metadata_from_dict(value: object) -> ModelMetadata:
             algorithm=str(data["algorithm"]),
             features=tuple(data["features"]),
             target=str(data["target"]),
+            forecast_horizon_minutes=int(data["forecast_horizon_minutes"]),
+            random_state=int(data["random_state"]),
             training_period=TrainingPeriod(**data["training_period"]),
             test_period=TrainingPeriod(**data["test_period"]),
             metrics=RegressionMetrics(**data["metrics"]),
+            candidate_metrics={
+                name: RegressionMetrics(**metrics)
+                for name, metrics in data["candidate_metrics"].items()
+            },
+            selection_metric=str(data["selection_metric"]),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise IncompatibleModelArtifactError("artifact metadata is incomplete") from error
 
 
 def load_model_artifact(
-    artifact_path: Path,
-    *,
-    expected_features: Sequence[str] = MODEL_FEATURES,
+    artifact_path: Path, *, expected_features: Sequence[str] = MODEL_FEATURES
 ) -> LoadedDemandModel:
-    """Load a model only when its format and ordered feature contract match."""
-
     if not artifact_path.is_file():
         raise ModelArtifactNotFoundError(f"model artifact not found: {artifact_path}")
     try:
@@ -241,8 +321,16 @@ def load_model_artifact(
         raise IncompatibleModelArtifactError(
             f"artifact features are incompatible: expected {expected}, got {metadata.features}"
         )
+    if metadata.target != TARGET_COLUMN or metadata.forecast_horizon_minutes != 60:
+        raise IncompatibleModelArtifactError("artifact prediction contract is incompatible")
     model = bundle["model"]
-    if not isinstance(model, RandomForestRegressor):
+    supported = (
+        HistoricalMeanBaseline,
+        RandomForestRegressor,
+        ExtraTreesRegressor,
+        HistGradientBoostingRegressor,
+    )
+    if not isinstance(model, supported) or type(model).__name__ != metadata.algorithm:
         raise IncompatibleModelArtifactError("artifact model type is incompatible")
     if getattr(model, "n_features_in_", None) != len(expected):
         raise IncompatibleModelArtifactError("artifact model feature count is incompatible")

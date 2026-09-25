@@ -16,10 +16,13 @@ integrada à aplicação.
   a janela de teste;
 - baseline pela média do target no treino para hora + dia da semana;
 - gerador sintético isolado do alocador de produção;
-- `RandomForestRegressor` treinado apenas na janela cronológica de treino;
+- baseline, `RandomForestRegressor`, `ExtraTreesRegressor` e
+  `HistGradientBoostingRegressor` avaliados na mesma janela cronológica;
+- seleção automática pelo menor RMSE, incluindo o baseline como possível vencedor;
 - features do modelo restritas às sete features mínimas da SPEC;
-- artefato Joblib contém modelo, versão de formato e do scikit-learn, contrato ordenado de features, target,
-  períodos de treino/teste e métricas;
+- artefato Joblib contém o vencedor, versão de formato e do scikit-learn,
+  contrato ordenado de features, target, horizonte, seed, períodos e métricas
+  de todos os candidatos;
 - carregamento falha explicitamente para artefato ausente, inválido ou com
   features incompatíveis;
 - previsões são consultivas e não são conectadas ao alocador energético;
@@ -89,24 +92,9 @@ substituir as invariantes determinísticas de energia.
 
 ## Resultado reproduzido
 
-Execução realizada em 23/09/2026 com seed 42 e split 80/20:
-
-| Item | Random Forest | Baseline | Diferença (modelo vs baseline) |
-|---|---:|---:|---:|
-| MAE | 11,533332 kW | 11,096404 kW | +0,436928 kW |
-| RMSE | 14,702845 kW | 14,122693 kW | +0,580152 kW |
-| R² | 0,811312 | 0,825909 | -0,014597 |
-
-Foram usadas 25.920 linhas. O treino contém 20.724 linhas entre
-2026-01-01 00:00 UTC e 2026-03-13 22:55 UTC; 12 linhas formam a lacuna causal;
-o teste contém 5.184 linhas entre
-2026-03-14 00:00 UTC e 2026-03-31 23:55 UTC.
-
-Pelo critério primário RMSE, o **baseline venceu**. O Random Forest inicial não
-superou o baseline nesta execução. O resultado
-é preservado como evidência experimental; o modelo não deve substituir o
-baseline nem influenciar diretamente a alocação energética com base nestas
-métricas.
+O relatório atualizado, com os quatro candidatos, análise por faixa de demanda
+e limitações, está em [ML_EVALUATION.md](ML_EVALUATION.md). O ganho observado é
+pequeno e não altera o caráter consultivo da previsão.
 
 Validação executada:
 

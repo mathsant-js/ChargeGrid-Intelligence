@@ -99,8 +99,9 @@ python3 scripts/sprint3_demo.py
 ```
 
 O preparo de ML gera 90 dias determinísticos (seed 42), aplica split temporal
-com uma lacuna de 60 minutos, avalia baseline e Random Forest, persiste o
-artefato e cria somente o histórico causal explicitado para a demo. O roteiro
+com uma lacuna de 60 minutos, compara o baseline com três modelos clássicos,
+persiste o vencedor por RMSE no artefato e cria somente o histórico causal
+explicitado para a demo. O roteiro
 chama `POST /api/v1/predictions/demand/run`, mostra demanda prevista,
 capacidade, horizonte, risco e recomendação e confirma `PEAK_RISK` em `HIGH`
 sem alterar os thresholds oficiais ou a alocação de potência.
