@@ -76,6 +76,11 @@ def execute_tick(
             high_demand_threshold = (
                 configuration.high_demand_threshold if configuration is not None else 0.85
             )
+            high_solar_threshold = (
+                configuration.high_solar_availability_threshold
+                if configuration is not None
+                else None
+            )
             rows = db.execute(
                 select(ChargingSession, Charger, Vehicle, ChargingStation)
                 .join(Charger, ChargingSession.charger_id == Charger.id)
@@ -90,12 +95,12 @@ def execute_tick(
 
             for station_id, members in stations.items():
                 # Serialize same-station ticks on PostgreSQL before checking idempotency.
-                station = db.scalar(
+                locked_station = db.scalar(
                     select(ChargingStation)
                     .where(ChargingStation.id == station_id)
                     .with_for_update()
                 )
-                if station is None:
+                if locked_station is None:
                     raise RuntimeError("charging station disappeared during tick")
                 existing = db.scalar(
                     select(SolarReading.id).where(
@@ -108,11 +113,11 @@ def execute_tick(
                     continue
 
                 solar_available = solar_provider.solar_available_kw(
-                    timestamp, station.station_peak_solar_kw
+                    timestamp, locked_station.station_peak_solar_kw
                 )
                 if (
                     not math.isfinite(solar_available)
-                    or not 0 <= solar_available <= station.station_peak_solar_kw
+                    or not 0 <= solar_available <= locked_station.station_peak_solar_kw
                 ):
                     raise ValueError("solar provider returned power outside station capacity")
                 requests = [
@@ -126,7 +131,7 @@ def execute_tick(
                 ]
                 powers = power_resolver.resolve(
                     station_id=station_id,
-                    grid_limit_kw=station.grid_limit_kw,
+                    grid_limit_kw=locked_station.grid_limit_kw,
                     solar_available_kw=solar_available,
                     sessions=requests,
                 )
@@ -138,7 +143,7 @@ def execute_tick(
                 solar_total = sum(power.solar_power_kw for power in powers.values())
                 if (
                     not math.isfinite(grid_total)
-                    or grid_total > station.grid_limit_kw + ABSOLUTE_TOLERANCE
+                    or grid_total > locked_station.grid_limit_kw + ABSOLUTE_TOLERANCE
                 ):
                     raise ValueError("grid power exceeds station limit")
                 if (
@@ -168,9 +173,21 @@ def execute_tick(
                         )
                         or 0.0
                     )
+                previous_solar_available = 0.0
+                if previous_station_tick is not None:
+                    previous_solar_available = (
+                        db.scalar(
+                            select(SolarReading.available_power_kw).where(
+                                SolarReading.station_id == station_id,
+                                SolarReading.timestamp == previous_timestamp,
+                            )
+                        )
+                        or 0.0
+                    )
                 if (
-                    grid_total / station.grid_limit_kw >= high_demand_threshold
-                    and previous_grid_power / station.grid_limit_kw < high_demand_threshold
+                    grid_total / locked_station.grid_limit_kw >= high_demand_threshold
+                    and previous_grid_power / locked_station.grid_limit_kw
+                    < high_demand_threshold
                 ):
                     db.add(
                         Alert(
@@ -180,7 +197,29 @@ def execute_tick(
                             title="High grid demand",
                             message=(
                                 f"Grid import reached {grid_total:.2f} kW of the "
-                                f"{station.grid_limit_kw:.2f} kW station limit."
+                                f"{locked_station.grid_limit_kw:.2f} kW station limit."
+                            ),
+                            created_at=timestamp,
+                        )
+                    )
+                if (
+                    high_solar_threshold is not None
+                    and locked_station.station_peak_solar_kw > 0
+                    and solar_available / locked_station.station_peak_solar_kw
+                    >= high_solar_threshold
+                    and previous_solar_available / locked_station.station_peak_solar_kw
+                    < high_solar_threshold
+                ):
+                    db.add(
+                        Alert(
+                            station_id=station_id,
+                            type=AlertType.HIGH_SOLAR_AVAILABILITY,
+                            severity=AlertSeverity.INFO,
+                            title="High solar availability",
+                            message=(
+                                f"Solar generation reached {solar_available:.2f} kW "
+                                f"({solar_available / locked_station.station_peak_solar_kw:.0%} "
+                                "of configured station peak)."
                             ),
                             created_at=timestamp,
                         )

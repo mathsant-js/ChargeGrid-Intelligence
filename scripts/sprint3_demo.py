@@ -64,7 +64,7 @@ def show(label: str, value: object) -> None:
 def tick(admin: str, station_id: str, expected_count: int,
          expected_solar_kw: float) -> None:
     result = call("POST", "/simulation/ticks", admin)
-    readings = call("GET", "/energy/history", params={"station_id": station_id})
+    readings = call("GET", "/energy/history", admin, params={"station_id": station_id})
     latest = [row for row in readings if row["timestamp"] == result["timestamp"]]
     if len(latest) != expected_count:
         raise RuntimeError(f"Expected {expected_count} readings, got {len(latest)}")
@@ -107,7 +107,7 @@ def main() -> None:
     hour, minute = instant.hour, instant.minute
     if hour != 11 or not 55 <= minute <= 59:
         raise RuntimeError("Set DEMO_SIMULATION_START_UTC near 11:58 UTC and restart the API")
-    if call("GET", "/energy/history", params={"station_id": station["id"]}):
+    if call("GET", "/energy/history", admin, params={"station_id": station["id"]}):
         raise RuntimeError("Use a fresh demo database; readings already exist")
     vehicles = [next(row for row in call("GET", "/vehicles", user)
                      if row["license_plate"] == f"S3D-{i:04d}")
@@ -128,7 +128,10 @@ def main() -> None:
                    {"station_peak_solar_kw": 20})
     show("solar_configuration", updated)
     tick(admin, station["id"], 4, 20)
-    show("solar_readings", call("GET", "/solar/history", params={"station_id": station["id"]}))
+    show(
+        "solar_readings",
+        call("GET", "/solar/history", admin, params={"station_id": station["id"]}),
+    )
     show("alerts", call("GET", "/alerts", admin, params={"station_id": station["id"]}))
     show("admin_dashboard", call("GET", "/analytics/dashboard", admin,
                                   params={"station_id": station["id"]}))

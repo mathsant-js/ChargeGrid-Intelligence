@@ -14,8 +14,15 @@ export interface UserDashboard { current_session: UserSessionSummary | null; ses
 export interface Dashboard { station_id: string | null; user_id: string | null; session_count: number; completed_session_count: number; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; billed_total: string; currency: string }
 export interface Sustainability { station_id: string | null; user_id: string | null; energy_consumed_kwh: number; solar_energy_kwh: number; grid_energy_kwh: number; solar_percentage: number; avoided_co2_kg: number; grid_emission_factor_kg_per_kwh: number; estimated_solar_savings: string; currency: string }
 export interface Filters { station_id?: string; user_id?: string; from?: string; to?: string }
-export interface Station { id: string; name: string; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
+export interface Station { id: string; name: string; description: string | null; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
+export interface StationInput { name: string; description: string | null; grid_limit_kw: number; station_peak_solar_kw: number; is_active: boolean }
 export interface Charger { id: string; station_id: string; name: string; code: string; max_power_kw: number; status: 'AVAILABLE' | 'CHARGING' | 'UNAVAILABLE'; is_active: boolean }
+export interface ChargerInput { station_id: string; name: string; code: string; max_power_kw: number; status: Charger['status']; is_active: boolean }
+export interface Tariff { id: string; name: string; price_per_kwh: string; currency: string; is_active: boolean; valid_from: string; valid_until: string | null; created_at: string }
+export interface TariffInput { name: string; price_per_kwh: number; currency: string; is_active: boolean; valid_from: string; valid_until: string | null }
+export interface SystemConfiguration { id: string; simulation_speed: number; grid_emission_factor_kg_per_kwh: number; high_demand_threshold: number; high_solar_availability_threshold: number; medium_peak_threshold: number; high_peak_threshold: number; created_at: string; updated_at: string }
+export type SystemConfigurationInput = Omit<SystemConfiguration, 'id' | 'created_at' | 'updated_at'>
+export interface SimulationStatus { state: 'RUNNING' | 'STOPPED'; current_instant: string; tick_duration_seconds: number; simulation_speed: number; last_tick: string | null }
 export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }
 export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string; recommendation: string }
 export interface Alert { id: string; station_id: string; type: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; title: string; message: string; created_at: string; acknowledged_at: string | null }
@@ -47,7 +54,9 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
   if (response.status === 401 && authenticated && token && tokenStore.get() === token) tokenStore.clear()
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null)
-    const detail = typeof body === 'object' && body !== null && 'detail' in body && typeof body.detail === 'string' ? body.detail : undefined
+    const rawDetail = typeof body === 'object' && body !== null && 'detail' in body ? body.detail : undefined
+    const detail = typeof rawDetail === 'string' ? rawDetail : Array.isArray(rawDetail)
+      ? rawDetail.map(item => typeof item === 'object' && item !== null && 'msg' in item ? String(item.msg) : '').filter(Boolean).join(' ') : undefined
     throw new ApiError(response.status, response.status === 403 ? 'Acesso não permitido.' : detail ?? `Erro HTTP ${response.status}`)
   }
   if (response.status === 204) return undefined as T
@@ -73,7 +82,21 @@ export const api = {
   dashboard: (filters?: Filters) => request<Dashboard>(`/analytics/dashboard${query(filters)}`),
   sustainability: (filters?: Filters) => request<Sustainability>(`/analytics/sustainability${query(filters)}`),
   stations: () => request<Station[]>('/stations'),
+  createStation: (value: StationInput) => request<Station>('/stations', { method: 'POST', body: JSON.stringify(value) }),
+  updateStation: (id: string, value: Partial<StationInput>) => request<Station>(`/stations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(value) }),
   chargers: () => request<Charger[]>('/chargers'),
+  createCharger: (value: ChargerInput) => request<Charger>('/chargers', { method: 'POST', body: JSON.stringify(value) }),
+  updateCharger: (id: string, value: Partial<ChargerInput>) => request<Charger>(`/chargers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(value) }),
+  tariffs: () => request<Tariff[]>('/tariffs'),
+  createTariff: (value: TariffInput) => request<Tariff>('/tariffs', { method: 'POST', body: JSON.stringify(value) }),
+  updateTariff: (id: string, value: Partial<TariffInput>) => request<Tariff>(`/tariffs/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(value) }),
+  systemConfiguration: () => request<SystemConfiguration>('/system-configuration'),
+  createSystemConfiguration: (value: SystemConfigurationInput) => request<SystemConfiguration>('/system-configuration', { method: 'POST', body: JSON.stringify(value) }),
+  updateSystemConfiguration: (value: SystemConfigurationInput) => request<SystemConfiguration>('/system-configuration', { method: 'PATCH', body: JSON.stringify(value) }),
+  simulationStatus: () => request<SimulationStatus>('/simulation/status'),
+  startSimulation: () => request<SimulationStatus>('/simulation/start', { method: 'POST' }),
+  stopSimulation: () => request<SimulationStatus>('/simulation/stop', { method: 'POST' }),
+  resetSimulation: () => request<SimulationStatus>('/simulation/reset', { method: 'POST' }),
   solarHistory: (filters?: Filters) => request<SolarReading[]>(`/solar/history${query(filters)}`),
   prediction: (station_id: string) => request<DemandPrediction>(`/predictions/demand${query({ station_id })}`),
   runPrediction: (station_id: string) => request<DemandPrediction>('/predictions/demand/run', { method: 'POST', body: JSON.stringify({ station_id }) }),

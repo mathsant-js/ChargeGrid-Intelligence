@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
     app_cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     api_v1_prefix: str = "/api/v1"
-    grid_emission_factor_kg_per_kwh: float = Field(default=0.0, ge=0)
     demand_model_path: Path = Path("../data/models/demand_forecast.joblib")
     demo_simulation_start_utc: datetime | None = None
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"

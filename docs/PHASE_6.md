@@ -1,9 +1,8 @@
 # Fase 6 — Integração e limites
 
-**Estado: parcial.** Os dashboards, gráficos, alertas e indicadores de
-sustentabilidade estão implementados. O requisito obrigatório de risco de pico
-do dashboard administrativo ainda depende do pipeline de previsão da Fase 7.
-Não há treinamento de ML nesta entrega.
+**Estado histórico da entrega:** concluída quanto a dashboards e integração;
+o risco de pico, então dependente da Fase 7, foi posteriormente implementado e
+validado. Consulte `PHASE_7.md` e `PHASE_9.md` para o estado final do MVP.
 
 ## Entregue
 
@@ -32,7 +31,7 @@ uma sessão concluída, o faturamento e o histórico do usuário. A API de
 sustentabilidade retorna a fração solar e o CO₂ evitado com fator de emissão
 configurado em 0,4 kg/kWh para o teste.
 
-## Limites restantes
+## Limites no momento desta fase
 
 - O KPI de risco de pico só aparece quando há uma previsão futura válida para
   a estação. O pipeline que produz previsões e classificações é trabalho da

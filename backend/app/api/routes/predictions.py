@@ -155,6 +155,9 @@ async def update_system_configuration(
         "simulation_speed": configuration.simulation_speed,
         "grid_emission_factor_kg_per_kwh": configuration.grid_emission_factor_kg_per_kwh,
         "high_demand_threshold": configuration.high_demand_threshold,
+        "high_solar_availability_threshold": (
+            configuration.high_solar_availability_threshold
+        ),
         "medium_peak_threshold": configuration.medium_peak_threshold,
         "high_peak_threshold": configuration.high_peak_threshold,
     }

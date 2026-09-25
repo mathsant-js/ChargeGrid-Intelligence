@@ -7,7 +7,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.main import app
 from app.models.infrastructure import ChargingStation
 from app.models.prediction import SystemConfiguration
@@ -36,10 +35,7 @@ def control() -> SimulationController:
 @pytest.mark.anyio
 async def test_phase_6_golden_path(
     client: AsyncClient, db_session: Session, control: SimulationController,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("GRID_EMISSION_FACTOR_KG_PER_KWH", "0.4")
-    get_settings.cache_clear()
     station = (await client.post(
         "/api/v1/stations",
         json={"name": "Golden Path", "grid_limit_kw": 60, "station_peak_solar_kw": 0},
@@ -144,4 +140,3 @@ async def test_phase_6_golden_path(
     assert len((await client.get("/api/v1/alerts", params={
         "station_id": station["id"],
     })).json()) >= 2
-    get_settings.cache_clear()

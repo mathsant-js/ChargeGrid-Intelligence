@@ -27,6 +27,8 @@ a { color: inherit; text-decoration: none; }
   margin: 0 auto;
   padding: 1.5rem 2rem;
 }
+.topbar nav { display: flex; gap: 1rem; color: #a9c7ba; }
+.topbar nav a:hover, .topbar nav a:focus-visible { color: #74eab8; }
 
 .brand { display: flex; align-items: center; gap: 0.75rem; font-weight: 700; }
 .brand__mark {
@@ -131,6 +133,20 @@ a { color: inherit; text-decoration: none; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .vehicle-form label, .session-form label { display: grid; gap: .4rem; color: #cce4da; }
 .dashboard input { width: 100%; padding: .7rem 1rem; border-radius: .55rem; border: 1px solid #47705d; color: #e8f5ef; background: #071713; }
+.dashboard textarea { min-height: 5rem; resize: vertical; padding: .7rem 1rem; border-radius: .55rem; border: 1px solid #47705d; color: #e8f5ef; background: #071713; }
+.admin-section { margin-top: 1.25rem; padding: 1.35rem; border: 1px solid #275343; border-radius: 1rem; background: #0c271e; }
+.admin-section .section-heading p { margin: .35rem 0 1rem; color: #a9c7ba; }
+.admin-form { padding: 1rem; border-radius: .75rem; background: #071f18; }
+.admin-form label { display: grid; gap: .4rem; color: #cce4da; }
+.admin-form .check-field { display: flex; align-items: center; align-self: end; min-height: 2.8rem; }
+.admin-form .check-field input { width: auto; }
+.wide-field { grid-column: 1 / -1; }
+.admin-list { display: grid; gap: .75rem; margin-top: 1rem; }
+.admin-list article { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1rem; border: 1px solid #275343; border-radius: .75rem; }
+.admin-list article > div:first-child { display: grid; gap: .3rem; }
+.admin-list article span { color: #a9c7ba; font-size: .88rem; }
+.admin-list .admin-form { flex-basis: 100%; }
+.simulation-control { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #275343; }
 .session-form { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; }
 .row-actions { justify-content: flex-start; }
 .dashboard .secondary-button { background: transparent; color: #e8f5ef; }
