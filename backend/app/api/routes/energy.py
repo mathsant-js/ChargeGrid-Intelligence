@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Query
@@ -22,7 +22,7 @@ def _filtered_readings(
     date_from: datetime | None,
     date_to: datetime | None,
     user_id: UUID | None = None,
-) -> Select[tuple[EnergyReading]]:
+) -> Select[Any]:
     query = select(EnergyReading)
     if station_id is not None or user_id is not None:
         query = query.join(ChargingSession)
@@ -47,7 +47,7 @@ async def current_energy(
     query = _filtered_readings(station_id, None, None, user_id).order_by(
         EnergyReading.timestamp.desc(), EnergyReading.id.desc()
     )
-    return db.scalar(query.limit(1))
+    return cast(EnergyReading | None, db.scalar(query.limit(1)))
 
 
 @router.get(

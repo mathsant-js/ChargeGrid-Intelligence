@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Query
@@ -17,7 +17,7 @@ DateTo = Annotated[datetime | None, Query(alias="to")]
 
 def _filtered_readings(
     station_id: UUID | None, date_from: datetime | None, date_to: datetime | None
-) -> Select[tuple[SolarReading]]:
+) -> Select[Any]:
     query = select(SolarReading)
     if station_id is not None:
         query = query.where(SolarReading.station_id == station_id)
@@ -37,7 +37,7 @@ async def current_solar(
     query = _filtered_readings(station_id, None, None).order_by(
         SolarReading.timestamp.desc(), SolarReading.id.desc()
     )
-    return db.scalar(query.limit(1))
+    return cast(SolarReading | None, db.scalar(query.limit(1)))
 
 
 @router.get(
