@@ -74,7 +74,8 @@ isolado de auditoria para tornar o ramo HIGH determinístico.
 
 ## Limitações assumidas do MVP
 
-- simulador manual, sem scheduler e sem hardware/OCPP/Modbus;
+- runner automático coordenado apenas em uma instância do backend, sem scheduler
+  distribuído e sem hardware/OCPP/Modbus;
 - billing simulado, sem pagamento real;
 - modelo local consultivo e dependente de artefato e histórico causal;
 - seed oficial não garante inferência imediata;

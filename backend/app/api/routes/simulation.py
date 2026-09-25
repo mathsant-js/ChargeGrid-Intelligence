@@ -1,4 +1,4 @@
-"""Administrative control of the explicitly advanced Phase 3 simulator."""
+"""Administrative control of the automatic Phase 3 simulator."""
 
 from typing import Annotated
 
@@ -40,15 +40,15 @@ async def simulation_status(_: AdminUser, control: Controller) -> SimulationStat
 async def start_simulation(
     db: DbSession, _: AdminUser, control: Controller
 ) -> SimulationStatusResponse:
-    """Idempotently start manual control; load the configured simulation speed."""
-    control.start(db)
+    """Idempotently start automatic ticks and load the configured simulation speed."""
+    await control.start(db)
     return _status(control)
 
 
 @router.post("/stop", response_model=SimulationStatusResponse, responses=AUTH_RESPONSES)
 async def stop_simulation(_: AdminUser, control: Controller) -> SimulationStatusResponse:
-    """Idempotently stop manual ticks; no worker or timer is started."""
-    control.stop()
+    """Idempotently stop automatic ticks and wait for the runner to exit."""
+    await control.stop()
     return _status(control)
 
 

@@ -117,7 +117,7 @@ async def test_phase_5_session_ticks_close_and_invoice_history(
 
 
 @pytest.fixture
-def control() -> SimulationController:
+async def control() -> SimulationController:
     value = SimulationController(SimulationClock(initial_instant=INSTANT))
 
     async def override() -> SimulationController:
@@ -125,6 +125,7 @@ def control() -> SimulationController:
 
     app.dependency_overrides[get_simulation_controller] = override
     yield value
+    await value.shutdown()
     app.dependency_overrides.pop(get_simulation_controller, None)
 
 

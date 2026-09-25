@@ -122,7 +122,11 @@ A Fase 3 contém relógio determinístico, provedor solar e o serviço
 `app.simulation.tick.execute_tick`. O serviço recebe uma resolução de potência
 injetável por estação, valida os limites físicos e persiste as leituras e os
 acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
-status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
+status, start, stop, reset e um tick manual (`POST /ticks`). `POST /start`
+também inicia um runner assíncrono no lifecycle do FastAPI, que executa um tick
+por intervalo real do relógio (um segundo por padrão); `POST /stop` cancela e
+aguarda esse runner. O tick manual permanece disponível para testes e
+demonstrações controladas.
 O controle de simulação usa a política Equal Share Allocation V1 da Fase 4:
 divide a capacidade da rede mais a geração solar entre sessões `CHARGING` de
 cada estação, respeita pedido, carregador e veículo, e redistribui sobras.
@@ -166,4 +170,5 @@ persiste a previsão de 60 minutos, classifica o risco com os thresholds de
 `SystemConfiguration` e cria `PEAK_RISK` uma vez por episódio `HIGH`. A
 previsão é estritamente consultiva e não altera a alocação energética. Consulte
 [docs/PHASE_7.md](docs/PHASE_7.md) para preparo do modelo, pré-condições e
-respostas de erro. O simulador continua dependendo de ticks manuais pela API.
+respostas de erro. O simulador executa ticks automaticamente enquanto RUNNING,
+sem deixar de aceitar ticks manuais pela API.
