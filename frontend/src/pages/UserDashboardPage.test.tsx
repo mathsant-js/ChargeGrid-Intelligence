@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { App } from '../App'
 import { tokenStore } from '../api/client'
+import './UserDashboardPage'
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const user = { id: 'u1', name: 'Bia', email: 'bia@example.com', role: 'USER', is_active: true, created_at: '', updated_at: '' }

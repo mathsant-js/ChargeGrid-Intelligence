@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
 import { tokenStore, type DemandPrediction } from '../api/client'
+import './AdminDashboardPage'
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const admin = { id: 'u1', name: 'Ana', email: 'ana@example.com', role: 'ADMIN', is_active: true, created_at: '', updated_at: '' }

@@ -5,6 +5,7 @@ import { App } from './App'
 import { tokenStore } from './api/client'
 
 const user = { id: 'u1', name: 'Ana', email: 'ana@example.com', role: 'USER', is_active: true, created_at: '', updated_at: '' }
+const admin = { ...user, id: 'a1', role: 'ADMIN' }
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const show = (path = '/') => render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
 
@@ -12,6 +13,12 @@ beforeEach(() => localStorage.clear())
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('authentication flow', () => {
+  it('shows an accessible loading state while an asynchronous route loads', async () => {
+    show('/login')
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando página...')
+    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
+  })
+
   it('logs in and shows the user dashboard with an empty state', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const path = String(input)
@@ -35,6 +42,26 @@ describe('authentication flow', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(user))
     show('/admin')
     expect(await screen.findByRole('heading', { name: 'Acesso não permitido' })).toBeInTheDocument()
+  })
+
+  it('prevents an ADMIN entering the user dashboard', async () => {
+    tokenStore.set('saved')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(admin))
+    show('/user')
+    expect(await screen.findByRole('heading', { name: 'Acesso não permitido' })).toBeInTheDocument()
+  })
+
+  it('redirects authenticated users from home to their role dashboard', async () => {
+    tokenStore.set('saved')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const path = String(input)
+      if (path.endsWith('/auth/me')) return json(user)
+      if (path.endsWith('/user/dashboard')) return json({ current_session: null, session_history: [], invoices: [] })
+      if (path.endsWith('/vehicles') || path.endsWith('/stations') || path.endsWith('/chargers')) return json([])
+      throw Error(path)
+    })
+    show('/')
+    expect(await screen.findByText('Nenhuma recarga em andamento.')).toBeInTheDocument()
   })
 
   it('clears an expired token and returns to login', async () => {
