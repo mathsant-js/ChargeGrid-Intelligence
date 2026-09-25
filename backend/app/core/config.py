@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     demand_model_path: Path = Path("../data/models/demand_forecast.joblib")
     demo_simulation_start_utc: datetime | None = None
+    simulation_runner_interval_seconds: float = Field(default=1, gt=0)
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"
     jwt_secret_key: str = Field(default=DEFAULT_JWT_SECRET, min_length=32)
     jwt_expiration_minutes: int = Field(default=60, gt=0)

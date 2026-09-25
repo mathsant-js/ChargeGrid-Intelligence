@@ -80,6 +80,8 @@ def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> N
                 "solar_power_kw": 0,
                 "grid_power_kw": 20,
                 "interval_energy_kwh": 1 / 3,
+                "solar_energy_kwh": 0,
+                "grid_energy_kwh": 1 / 3,
             }
             for _ in range(3)
         ]
@@ -87,7 +89,13 @@ def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(demo, "call", fake_call)
     monkeypatch.setattr(demo, "show", lambda *_: None)
 
-    demo.tick("admin-token", "station-id", expected_count=3, expected_solar_kw=0)
+    demo.tick(
+        "admin-token",
+        "station-id",
+        expected_count=3,
+        expected_solar_kw=0,
+        expected_session_kw=20,
+    )
 
     assert ("GET", "/energy/history", "admin-token") in calls
 
@@ -101,10 +109,16 @@ def test_complete_demo_runs_advisory_prediction_with_documented_thresholds(
     monkeypatch.setattr(demo, "wait_for_api", lambda: None)
     monkeypatch.setattr(demo, "login", lambda email, password: f"token:{email}")
     monkeypatch.setattr(demo, "show", lambda *_: None)
-    monkeypatch.setattr(demo, "tick", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        demo,
+        "tick",
+        lambda *args, **kwargs: [{"requested_power_kw": 20} for _ in range(3)],
+    )
+    monkeypatch.setattr(demo, "validate_web_surfaces", lambda: None)
     calls: list[tuple[str, str, dict | None]] = []
     history = [{"timestamp": "2026-09-11T12:01:00Z", "allocated_power_kw": 20}]
     session_number = 0
+    dashboard_calls = 0
 
     def fake_call(
         method: str,
@@ -113,8 +127,12 @@ def test_complete_demo_runs_advisory_prediction_with_documented_thresholds(
         body: dict | None = None,
         params: dict | None = None,
     ) -> object:
-        nonlocal session_number
+        nonlocal dashboard_calls, session_number
         calls.append((method, path, body))
+        if path == "/health":
+            return {"status": "ok"}
+        if path == "/auth/me":
+            return {"role": "ADMIN" if "admin" in str(token) else "USER"}
         if path == "/stations":
             return [{"id": "station", "name": demo.PREFIX, "station_peak_solar_kw": 0}]
         if path == "/chargers":
@@ -144,6 +162,32 @@ def test_complete_demo_runs_advisory_prediction_with_documented_thresholds(
             }
         if path == "/energy/history":
             return history
+        if path.startswith("/chargers/"):
+            return {"status": "AVAILABLE"}
+        if path == "/billing/invoices":
+            return [{
+                "id": "invoice", "status": "CLOSED", "subtotal": "0.47",
+                "total": "0.47", "energy_kwh": "0.5833",
+            }]
+        if path == "/analytics/dashboard":
+            dashboard_calls += 1
+            return {
+                "session_count": 8,
+                "completed_session_count": 3 + dashboard_calls,
+                "energy_consumed_kwh": 1,
+                "billed_total": "0.00" if dashboard_calls == 1 else "0.47",
+            }
+        if path == "/analytics/sustainability":
+            return {"energy_consumed_kwh": 1, "solar_energy_kwh": 0.1,
+                    "avoided_co2_kg": 0.04}
+        if path == "/user/dashboard":
+            return {"current_session": None, "invoices": [{"id": "invoice"}]}
+        if path == "/alerts":
+            return [{"type": item} for item in
+                    ("HIGH_DEMAND", "HIGH_SOLAR_AVAILABILITY", "PEAK_RISK")]
+        if method == "POST" and path.endswith("/stop"):
+            return {"status": "COMPLETED", "total_cost": "0.47",
+                    "energy_consumed_kwh": 0.5833}
         if method == "PATCH" and path == "/stations/station":
             return {"station_peak_solar_kw": 20}
         return []

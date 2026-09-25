@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${MVP_SMOKE_POSTGRES_DB:?required}
+      POSTGRES_USER: ${MVP_SMOKE_POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${MVP_SMOKE_POSTGRES_PASSWORD:?required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_smoke_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: demo
+      APP_LOG_LEVEL: INFO
+      APP_CORS_ORIGINS: '["http://localhost:${MVP_SMOKE_FRONTEND_PORT:?required}"]'
+      DATABASE_URL: postgresql+psycopg://${MVP_SMOKE_POSTGRES_USER}:${MVP_SMOKE_POSTGRES_PASSWORD}@db:5432/${MVP_SMOKE_POSTGRES_DB}
+      JWT_SECRET_KEY: ${MVP_SMOKE_JWT_SECRET:?required}
+      JWT_EXPIRATION_MINUTES: 60
+      JWT_ALGORITHM: HS256
+      DEMAND_MODEL_PATH: /data/models/demand_forecast.joblib
+      DEMO_SIMULATION_START_UTC: "2026-09-18T11:58:00Z"
+      SIMULATION_RUNNER_INTERVAL_SECONDS: 3600
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?required}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?required}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MVP_SMOKE_BACKEND_PORT:?required}:8000"
+    volumes:
+      - smoke_artifacts:/data
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:${MVP_SMOKE_BACKEND_PORT:?required}/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MVP_SMOKE_FRONTEND_PORT:?required}:5173"
+
+volumes:
+  postgres_smoke_data:
+  smoke_artifacts:

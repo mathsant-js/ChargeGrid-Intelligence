@@ -171,7 +171,7 @@ def main() -> None:
         seed=args.seed,
         test_fraction=args.test_fraction,
     )
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps(result, indent=2, sort_keys=True, default=str))
 
 
 if __name__ == "__main__":

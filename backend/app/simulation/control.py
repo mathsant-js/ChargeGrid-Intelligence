@@ -34,6 +34,7 @@ class SimulationController:
         *,
         session_factory: SessionFactory = SessionLocal,
         wait: WaitFunction = asyncio.sleep,
+        runner_interval_seconds: float | None = None,
     ) -> None:
         self.clock = clock or SimulationClock(
             initial_instant=get_settings().demo_simulation_start_utc or datetime.now(UTC)
@@ -42,6 +43,11 @@ class SimulationController:
         self.lock = RLock()
         self._session_factory = session_factory
         self._wait = wait
+        self._runner_interval_seconds = (
+            runner_interval_seconds
+            if runner_interval_seconds is not None
+            else get_settings().simulation_runner_interval_seconds
+        )
         self._runner_task: asyncio.Task[None] | None = None
         self._runner_guard = asyncio.Lock()
 
@@ -100,7 +106,7 @@ class SimulationController:
         logger.info("simulation_runner_started")
         try:
             while self.clock.state is SimulationClockState.RUNNING:
-                await self._wait(self.clock.real_tick_interval.total_seconds())
+                await self._wait(self._runner_interval_seconds)
                 if self.clock.state is not SimulationClockState.RUNNING:
                     break
                 try:

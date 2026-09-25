@@ -1,0 +1,13 @@
+name: MVP delivery smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  delivery-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the real MVP on isolated PostgreSQL 16
+        run: make mvp-smoke

@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -48,6 +49,17 @@ def test_ml_demo_history_is_causal_deterministic_and_idempotent(db_session: Sess
     assert db_session.scalar(select(func.count()).select_from(SolarReading)) == 1
     assert db_session.scalar(select(func.count()).select_from(ChargingSession)) == 4
     assert db_session.scalar(select(func.sum(EnergyReading.allocated_power_kw))) == 80
+
+
+def test_ml_demo_result_with_datetimes_is_json_serializable() -> None:
+    result = {
+        "training": {"trained_at": datetime(2026, 9, 18, tzinfo=UTC)},
+        "historical_observation_at": "2026-09-11T12:01:00+00:00",
+    }
+
+    rendered = json.dumps(result, default=str)
+
+    assert "2026-09-18 00:00:00+00:00" in rendered
 
 
 def test_demo_clock_is_opt_in_and_utc(monkeypatch: pytest.MonkeyPatch) -> None:

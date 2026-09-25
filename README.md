@@ -64,6 +64,20 @@ make check
 
 O alvo executa testes, lint e verificação de tipos no backend e no frontend, além do build web. Consulte [CONTRIBUTING.md](docs/CONTRIBUTING.md) para o fluxo detalhado.
 
+## Smoke test de entrega do MVP
+
+Para validar migrations, seed e o Golden Path completo usando a aplicação real
+e um PostgreSQL 16 isolado e descartável:
+
+```bash
+make mvp-smoke
+```
+
+O teste usa credenciais efêmeras, não toca no volume `postgres_data` do ambiente
+normal e sempre limita o cleanup ao projeto criado por ele. Execução detalhada,
+portas alternativas, CI manual e troubleshooting estão em
+[docs/MVP_DELIVERY_SMOKE_TEST.md](docs/MVP_DELIVERY_SMOKE_TEST.md).
+
 ## Demo da Sprint 3
 
 Execute o [roteiro reproduzível da Sprint 3](docs/sprint-3/README.md) em um banco isolado. Ele inclui comandos de seed, configuração UTC, cenário por endpoints públicos e resultados esperados.
