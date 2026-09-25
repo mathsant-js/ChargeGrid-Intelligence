@@ -2,6 +2,7 @@ from pathlib import Path
 
 import joblib
 import pytest
+import sklearn
 
 from app.ml.baseline import evaluate_hour_weekday_baseline
 from app.ml.dataset import DatasetConfig, DemandDatasetRow, generate_dataset
@@ -50,6 +51,7 @@ def test_training_reports_required_metrics_and_baseline_comparison(
     baseline, result = _train(dataset, tmp_path / "model.joblib")
 
     assert result.metadata.algorithm == "RandomForestRegressor"
+    assert result.metadata.sklearn_version == sklearn.__version__
     assert result.metadata.metrics.mae >= 0
     assert result.metadata.metrics.rmse >= 0
     assert result.metadata.metrics.r2 == pytest.approx(result.metadata.metrics.r2)
@@ -58,6 +60,8 @@ def test_training_reports_required_metrics_and_baseline_comparison(
     assert result.comparison.mae_improvement == pytest.approx(
         baseline.metrics.mae - result.metadata.metrics.mae
     )
+    assert result.comparison.selection_metric == "rmse"
+    assert result.comparison.winner in {"model", "baseline"}
 
 
 def test_model_is_persisted_reloaded_and_predicts(
@@ -100,4 +104,17 @@ def test_loading_rejects_tampered_feature_metadata(
     joblib.dump(bundle, artifact_path)
 
     with pytest.raises(IncompatibleModelArtifactError, match="features are incompatible"):
+        load_model_artifact(artifact_path)
+
+
+def test_loading_rejects_incompatible_sklearn_version(
+    dataset: list[DemandDatasetRow], tmp_path: Path
+) -> None:
+    artifact_path = tmp_path / "model.joblib"
+    _train(dataset, artifact_path)
+    bundle = joblib.load(artifact_path)
+    bundle["metadata"]["sklearn_version"] = "0.0.0"
+    joblib.dump(bundle, artifact_path)
+
+    with pytest.raises(IncompatibleModelArtifactError, match="scikit-learn version"):
         load_model_artifact(artifact_path)

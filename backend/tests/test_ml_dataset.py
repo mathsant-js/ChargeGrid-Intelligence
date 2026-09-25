@@ -90,7 +90,8 @@ def test_generation_is_reproducible_and_seed_configurable() -> None:
 def test_chronological_split_has_no_overlap(dataset: list[DemandDatasetRow]) -> None:
     train, test = chronological_split(dataset, test_fraction=0.25)
     assert train[-1].timestamp < test[0].timestamp
-    assert len(train) + len(test) == len(dataset)
+    assert train[-1].timestamp + timedelta(minutes=60) < test[0].timestamp
+    assert len(train) + len(test) + HORIZON_STEPS == len(dataset)
 
 
 def test_baseline_metrics_are_calculated_correctly() -> None:
@@ -106,7 +107,7 @@ def test_hour_weekday_baseline_reports_finite_metrics_and_periods(
     evaluation = evaluate_hour_weekday_baseline(dataset)
     assert evaluation.strategy == "historical_mean_by_hour_and_day_of_week"
     assert evaluation.train_end < evaluation.test_start
-    assert evaluation.train_rows + evaluation.test_rows == len(dataset)
+    assert evaluation.train_rows + evaluation.test_rows + HORIZON_STEPS == len(dataset)
     assert evaluation.metrics.mae >= 0
     assert evaluation.metrics.rmse >= 0
     assert all(

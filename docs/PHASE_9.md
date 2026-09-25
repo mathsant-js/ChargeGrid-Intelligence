@@ -23,7 +23,7 @@ verdade. Não foram adicionadas funcionalidades de escopo secundário.
 | Alertas de demanda, pico, solar e encerramento | tick, inferência e encerramento | `test_simulation_tick.py`, `test_demand_inference.py`, `test_billing_alerts.py` | Atendido |
 | Health, OpenAPI e erros sem stack trace | `main.py`, health e handlers | `test_health.py`, `test_openapi.py`, `test_error_handling.py` | Atendido |
 | Frontend responsivo, vazio, loading, retry e erros | páginas React e breakpoints em `styles.css` | 31 testes Vitest e inspeção visual em 390 px | Atendido |
-| Seed e cenário oficial 3→4 carregadores | `app/demo_seed.py`, `scripts/sprint3_demo.py` | `test_demo_seed.py`, `test_sprint3_demo_script.py`, PostgreSQL real | Atendido com limitação de ML |
+| Seed e cenário oficial 3→4 carregadores + ML | `app/demo_seed.py`, `app/ml/demo_prepare.py`, `scripts/sprint3_demo.py` | `test_demo_seed.py`, `test_sprint3_demo_script.py`, PostgreSQL real | Atendido |
 | Relógio acelerado automático | relógio configurável e ticks administrativos manuais | testes do relógio e simulação | Parcial |
 
 ## Lacunas encontradas e decisão
@@ -31,9 +31,8 @@ verdade. Não foram adicionadas funcionalidades de escopo secundário.
 - O roteiro chamava endpoints protegidos de energia e solar sem JWT. Isso fazia
   a demo falhar em uma API real, embora passasse em testes com dependências
   substituídas. O token ADMIN foi incluído e um teste de regressão foi criado.
-- O roteiro oficial ainda não prepara o histórico causal exigido pela inferência.
-  A previsão real foi validada separadamente no PostgreSQL com uma observação
-  histórica anterior e o artefato treinado; não se ocultou essa preparação no seed.
+- O preparo de ML é separado do seed de domínio: gera dataset/artefato e registra
+  explicitamente uma observação histórica causal, idempotente e anterior ao cenário.
 - A simulação é acionada por ticks administrativos; não existe loop em background.
   Isso é aceito como limitação do MVP demonstrável, não como integração com hardware.
 - O modelo Random Forest versionado como artefato local não superou o baseline no
@@ -49,8 +48,8 @@ Em 24/09/2026:
 ```text
 make check
   Ruff: aprovado
-  mypy: aprovado (74 arquivos)
-  pytest: 210 aprovados; cobertura total 96%
+  mypy: aprovado (75 arquivos)
+  pytest: 220 aprovados; cobertura total 95%
   ESLint: aprovado
   TypeScript: aprovado
   Vitest: 31 aprovados
@@ -69,8 +68,8 @@ O Golden Path real confirmou 3 × 20 kW, depois 4 × 15 kW sob limite de
 60 kW, e em seguida 80 kW totais com 20 kW solares e 60 kW de rede. A quarta
 sessão foi encerrada com invoice `CLOSED` de R$ 0,47 e os dashboards refletiram
 billing e ESG. A inferência real produziu previsão para +60 minutos, risco
-`HIGH` e alerta `PEAK_RISK`; limiares reduzidos foram usados somente no banco
-isolado de auditoria para tornar o ramo HIGH determinístico.
+`HIGH` e alerta `PEAK_RISK` usando os limiares documentados 0,70/0,90. Nenhum
+threshold foi alterado para produzir esse resultado.
 
 ## Limitações assumidas do MVP
 
@@ -78,19 +77,21 @@ isolado de auditoria para tornar o ramo HIGH determinístico.
   distribuído e sem hardware/OCPP/Modbus;
 - billing simulado, sem pagamento real;
 - modelo local consultivo e dependente de artefato e histórico causal;
-- seed oficial não garante inferência imediata;
+- inferência depende da etapa documentada `app.ml.demo_prepare`;
 - sem MLOps, cloud complexa, app mobile ou recursos do escopo secundário;
 - aviso de tamanho do bundle frontend, sem falha funcional observada.
 
 ## Roteiro final de demonstração
 
-1. Subir Docker, aplicar migrations e executar o seed com senhas no ambiente.
-2. Abrir health, OpenAPI e autenticar gestor e motorista.
-3. Iniciar três sessões e executar tick: 3 × 20 kW, 60 kW de rede.
-4. Iniciar a quarta e executar tick: 4 × 15 kW, ainda 60 kW de rede.
-5. Configurar pico solar em 20 kW e executar tick: 80 kW alocados, 20 solar + 60 rede.
-6. Mostrar leituras, `HIGH_DEMAND`/`HIGH_SOLAR_AVAILABILITY` e dashboards.
-7. Com artefato e histórico causal preparados, executar previsão e mostrar risco,
-   recomendação e `PEAK_RISK` sem alteração da alocação.
-8. Encerrar a quarta sessão e mostrar `COMPLETED`, carregador `AVAILABLE`, invoice
+1. Subir somente PostgreSQL, aplicar migrations e executar o seed com senhas no ambiente.
+2. Executar `app.ml.demo_prepare` para treinar, persistir métricas/artefato e
+   preparar o histórico causal; depois iniciar backend e frontend.
+3. Abrir health, OpenAPI e autenticar gestor e motorista.
+4. Iniciar três sessões e executar tick: 3 × 20 kW, 60 kW de rede.
+5. Iniciar a quarta e executar tick: 4 × 15 kW, ainda 60 kW de rede.
+6. Configurar pico solar em 20 kW e executar tick: 80 kW alocados, 20 solar + 60 rede.
+7. Mostrar leituras, `HIGH_DEMAND`/`HIGH_SOLAR_AVAILABILITY` e dashboards.
+8. Executar `POST /predictions/demand/run` e mostrar demanda, capacidade, +60 min,
+   risco `HIGH`, recomendação e `PEAK_RISK`, sem alterar alocação.
+9. Encerrar a quarta sessão e mostrar `COMPLETED`, carregador `AVAILABLE`, invoice
    `CLOSED`, custo, participação solar, CO₂ evitado e dashboards atualizados.

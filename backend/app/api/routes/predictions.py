@@ -1,6 +1,7 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import select
 
@@ -29,9 +30,11 @@ from app.schemas.prediction import (
     SystemConfigurationValues,
 )
 from app.services.demand_predictions import PredictionDataError, run_demand_prediction
+from app.simulation.control import SimulationController, get_simulation_controller
 
 predictions_router = APIRouter(prefix="/predictions", tags=["predictions"])
 configuration_router = APIRouter(prefix="/system-configuration", tags=["configuration"])
+Controller = Annotated[SimulationController, Depends(get_simulation_controller)]
 
 
 @predictions_router.get(
@@ -82,7 +85,10 @@ async def create_demand_prediction(
     },
 )
 async def execute_demand_prediction(
-    payload: DemandPredictionRun, db: DbSession, _: AdminUser
+    payload: DemandPredictionRun,
+    db: DbSession,
+    _: AdminUser,
+    control: Controller,
 ) -> DemandPrediction:
     station = db.scalar(
         select(ChargingStation)
@@ -95,11 +101,17 @@ async def execute_demand_prediction(
     if configuration is None:
         raise HTTPException(status_code=404, detail="Configuration not found")
     try:
+        settings = get_settings()
         prediction = run_demand_prediction(
             db,
             station=station,
             configuration=configuration,
-            artifact_path=get_settings().demand_model_path,
+            artifact_path=settings.demand_model_path,
+            generated_at=(
+                control.clock.current_instant
+                if settings.demo_simulation_start_utc is not None
+                else None
+            ),
         )
     except PredictionDataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

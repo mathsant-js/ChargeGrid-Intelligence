@@ -90,3 +90,70 @@ def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> N
     demo.tick("admin-token", "station-id", expected_count=3, expected_solar_kw=0)
 
     assert ("GET", "/energy/history", "admin-token") in calls
+
+
+def test_complete_demo_runs_advisory_prediction_with_documented_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = load_demo_script()
+    monkeypatch.setenv("DEMO_ADMIN_PASSWORD", "admin-secret")
+    monkeypatch.setenv("DEMO_USER_PASSWORD", "user-secret")
+    monkeypatch.setattr(demo, "wait_for_api", lambda: None)
+    monkeypatch.setattr(demo, "login", lambda email, password: f"token:{email}")
+    monkeypatch.setattr(demo, "show", lambda *_: None)
+    monkeypatch.setattr(demo, "tick", lambda *args, **kwargs: None)
+    calls: list[tuple[str, str, dict | None]] = []
+    history = [{"timestamp": "2026-09-11T12:01:00Z", "allocated_power_kw": 20}]
+    session_number = 0
+
+    def fake_call(
+        method: str,
+        path: str,
+        token: str | None = None,
+        body: dict | None = None,
+        params: dict | None = None,
+    ) -> object:
+        nonlocal session_number
+        calls.append((method, path, body))
+        if path == "/stations":
+            return [{"id": "station", "name": demo.PREFIX, "station_peak_solar_kw": 0}]
+        if path == "/chargers":
+            return [
+                {"id": f"charger-{i}", "station_id": "station", "code": f"CH-{i}"}
+                for i in range(1, 5)
+            ]
+        if path == "/simulation/status":
+            return {"state": "STOPPED", "current_instant": "2026-09-18T11:58:00Z"}
+        if path == "/vehicles":
+            return [
+                {"id": f"vehicle-{i}", "license_plate": f"S3D-{i:04d}"}
+                for i in range(1, 5)
+            ]
+        if path == "/sessions/start":
+            session_number += 1
+            return {"id": f"session-{session_number}"}
+        if path == "/system-configuration":
+            return {"medium_peak_threshold": 0.7, "high_peak_threshold": 0.9}
+        if path == "/predictions/demand/run":
+            return {
+                "predicted_demand_kw": 73.9,
+                "capacity_kw": 80,
+                "prediction_horizon_minutes": 60,
+                "risk_level": "HIGH",
+                "recommendation": "deterministic",
+            }
+        if path == "/energy/history":
+            return history
+        if method == "PATCH" and path == "/stations/station":
+            return {"station_peak_solar_kw": 20}
+        return []
+
+    monkeypatch.setattr(demo, "call", fake_call)
+
+    demo.main()
+
+    assert ("POST", "/predictions/demand/run", {"station_id": "station"}) in calls
+    assert not any(
+        method == "PATCH" and path == "/system-configuration"
+        for method, path, _ in calls
+    )

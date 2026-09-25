@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.ml.dataset import DemandDatasetRow
+from app.ml.dataset import HORIZON_STEPS, DemandDatasetRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,21 +29,28 @@ class BaselineEvaluation:
 
 
 def chronological_split(
-    rows: Sequence[DemandDatasetRow], test_fraction: float = 0.2
+    rows: Sequence[DemandDatasetRow],
+    test_fraction: float = 0.2,
+    purge_steps: int = HORIZON_STEPS,
 ) -> tuple[Sequence[DemandDatasetRow], Sequence[DemandDatasetRow]]:
     if not 0 < test_fraction < 1:
         raise ValueError("test_fraction must be between zero and one")
-    if len(rows) < 2:
-        raise ValueError("at least two rows are required")
+    if purge_steps < 0:
+        raise ValueError("purge_steps must be nonnegative")
+    if len(rows) < purge_steps + 2:
+        raise ValueError("rows must cover train, purge gap, and test")
     if any(
         current.timestamp <= previous.timestamp
         for previous, current in zip(rows, rows[1:], strict=False)
     ):
         raise ValueError("rows must be strictly ordered by timestamp")
     split_index = int(len(rows) * (1 - test_fraction))
-    if split_index == 0 or split_index == len(rows):
+    train_end = split_index - purge_steps
+    if train_end <= 0 or split_index == len(rows):
         raise ValueError("split must leave rows in train and test")
-    return rows[:split_index], rows[split_index:]
+    # Labels are 60 minutes ahead. Removing the rows immediately before the
+    # test boundary ensures no training label observes the test period.
+    return rows[:train_end], rows[split_index:]
 
 
 def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> RegressionMetrics:

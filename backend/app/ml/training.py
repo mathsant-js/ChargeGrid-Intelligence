@@ -9,6 +9,7 @@ from typing import Any, Protocol, cast
 
 import joblib
 import pandas as pd
+import sklearn
 from sklearn.ensemble import RandomForestRegressor
 
 from app.ml.baseline import RegressionMetrics, chronological_split, regression_metrics
@@ -27,7 +28,7 @@ MODEL_FEATURES = (
     "solar_available_kw",
 )
 TARGET_COLUMN = "demand_kw_next_60_minutes"
-ARTIFACT_FORMAT_VERSION = 1
+ARTIFACT_FORMAT_VERSION = 2
 
 
 class ModelArtifactError(RuntimeError):
@@ -52,6 +53,7 @@ class TrainingPeriod:
 @dataclass(frozen=True, slots=True)
 class ModelMetadata:
     artifact_format_version: int
+    sklearn_version: str
     model_version: str
     algorithm: str
     features: tuple[str, ...]
@@ -68,6 +70,8 @@ class ModelComparison:
     mae_improvement: float
     rmse_improvement: float
     r2_improvement: float
+    winner: str
+    selection_metric: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +163,7 @@ def train_and_evaluate(
     )
     metadata = ModelMetadata(
         artifact_format_version=ARTIFACT_FORMAT_VERSION,
+        sklearn_version=sklearn.__version__,
         model_version=MODEL_VERSION,
         algorithm="RandomForestRegressor",
         features=MODEL_FEATURES,
@@ -173,6 +178,8 @@ def train_and_evaluate(
         mae_improvement=baseline_metrics.mae - metrics.mae,
         rmse_improvement=baseline_metrics.rmse - metrics.rmse,
         r2_improvement=metrics.r2 - baseline_metrics.r2,
+        winner="model" if metrics.rmse < baseline_metrics.rmse else "baseline",
+        selection_metric="rmse",
     )
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": model, "metadata": asdict(metadata)}, artifact_path)
@@ -193,6 +200,7 @@ def _metadata_from_dict(value: object) -> ModelMetadata:
         data = cast(dict[str, Any], value)
         return ModelMetadata(
             artifact_format_version=int(data["artifact_format_version"]),
+            sklearn_version=str(data["sklearn_version"]),
             model_version=str(data["model_version"]),
             algorithm=str(data["algorithm"]),
             features=tuple(data["features"]),
@@ -224,6 +232,11 @@ def load_model_artifact(
     expected = tuple(expected_features)
     if metadata.artifact_format_version != ARTIFACT_FORMAT_VERSION:
         raise IncompatibleModelArtifactError("artifact format version is incompatible")
+    if metadata.sklearn_version != sklearn.__version__:
+        raise IncompatibleModelArtifactError(
+            "artifact scikit-learn version is incompatible: "
+            f"expected {sklearn.__version__}, got {metadata.sklearn_version}"
+        )
     if metadata.features != expected:
         raise IncompatibleModelArtifactError(
             f"artifact features are incompatible: expected {expected}, got {metadata.features}"

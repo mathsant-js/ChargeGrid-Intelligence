@@ -84,13 +84,26 @@ Acesse o [arquivo MP4 do vídeo pitch da Sprint 3](video_editado/Pitch_challenge
 
 Assista ao [vídeo pitch da Sprint 3 no YouTube](https://youtu.be/caGX1bfDN7s).
 
-Após configurar `.env` e exportar `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` conforme o roteiro:
+Após configurar `.env` com `APP_ENV=demo` e
+`DEMO_SIMULATION_START_UTC=2026-09-18T11:58:00Z`, exporte as duas senhas e siga
+esta ordem a partir de um volume PostgreSQL novo:
 
 ```bash
-docker compose up --build -d
-docker compose exec -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python -m app.demo_seed
+docker compose up -d db
+docker compose run --rm backend alembic upgrade head
+docker compose run --rm -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python -m app.demo_seed
+docker compose run --rm backend python -m app.ml.demo_prepare \
+  --demo-start 2026-09-18T11:58:00+00:00
+docker compose up --build --wait -d backend frontend
 python3 scripts/sprint3_demo.py
 ```
+
+O preparo de ML gera 90 dias determinísticos (seed 42), aplica split temporal
+com uma lacuna de 60 minutos, avalia baseline e Random Forest, persiste o
+artefato e cria somente o histórico causal explicitado para a demo. O roteiro
+chama `POST /api/v1/predictions/demand/run`, mostra demanda prevista,
+capacidade, horizonte, risco e recomendação e confirma `PEAK_RISK` em `HIGH`
+sem alterar os thresholds oficiais ou a alocação de potência.
 
 ## Documentação
 

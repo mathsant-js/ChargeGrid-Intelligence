@@ -107,8 +107,12 @@ def main() -> None:
     hour, minute = instant.hour, instant.minute
     if hour != 11 or not 55 <= minute <= 59:
         raise RuntimeError("Set DEMO_SIMULATION_START_UTC near 11:58 UTC and restart the API")
-    if call("GET", "/energy/history", admin, params={"station_id": station["id"]}):
-        raise RuntimeError("Use a fresh demo database; readings already exist")
+    existing_readings = call(
+        "GET", "/energy/history", admin, params={"station_id": station["id"]}
+    )
+    if any(datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")) >= instant
+           for row in existing_readings):
+        raise RuntimeError("Use a freshly prepared demo database; scenario readings exist")
     vehicles = [next(row for row in call("GET", "/vehicles", user)
                      if row["license_plate"] == f"S3D-{i:04d}")
                 for i, user in enumerate(users, 1)]
@@ -128,10 +132,35 @@ def main() -> None:
                    {"station_peak_solar_kw": 20})
     show("solar_configuration", updated)
     tick(admin, station["id"], 4, 20)
+    call("POST", "/simulation/stop", admin)
     show(
         "solar_readings",
         call("GET", "/solar/history", admin, params={"station_id": station["id"]}),
     )
+    configuration = call("GET", "/system-configuration", admin)
+    if (configuration["medium_peak_threshold"], configuration["high_peak_threshold"]) != (
+        0.7,
+        0.9,
+    ):
+        raise RuntimeError("Official demo requires the documented 0.70/0.90 risk thresholds")
+    before_prediction = call(
+        "GET", "/energy/history", admin, params={"station_id": station["id"]}
+    )
+    prediction = call(
+        "POST", "/predictions/demand/run", admin, {"station_id": station["id"]}
+    )
+    after_prediction = call(
+        "GET", "/energy/history", admin, params={"station_id": station["id"]}
+    )
+    if before_prediction != after_prediction:
+        raise RuntimeError("Advisory prediction changed persisted energy allocation")
+    if (
+        prediction["risk_level"] != "HIGH"
+        or prediction["prediction_horizon_minutes"] != 60
+        or abs(prediction["capacity_kw"] - 80) > 0.1
+    ):
+        raise RuntimeError(f"Expected reproducible HIGH prediction, got {prediction}")
+    show("demand_prediction", prediction)
     show("alerts", call("GET", "/alerts", admin, params={"station_id": station["id"]}))
     show("admin_dashboard", call("GET", "/analytics/dashboard", admin,
                                   params={"station_id": station["id"]}))
