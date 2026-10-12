@@ -183,6 +183,15 @@ inicialização deriva a posição da maior leitura energética ou solar existen
 avança um intervalo e continua parada. `POST /reset` também persiste o novo
 instante sem apagar leituras históricas.
 
+Em PostgreSQL, cada tick bloqueia a linha singleton do checkpoint (`FOR
+UPDATE`) até o commit. Assim, workers que concorrem avançam a partir do instante
+durável mais recente e executam ticks consecutivos, em vez de repetir um mesmo
+instante com relógios divergentes. A criação inicial do checkpoint também é
+serializada. SQLite continua adequado aos testes locais, mas não oferece a
+garantia de coordenação entre processos do PostgreSQL. Cada worker ainda inicia
+com o simulador parado; um `POST /start` em cada processo cria runners que
+cooperam pela trava do banco.
+
 Na Fase 5, a sessão captura a tarifa ativa válida no início. Ao encerrar, o
 backend calcula o custo Pay-per-Use, cria uma invoice `CLOSED` e registra um
 alerta na mesma transação. O histórico de invoices está disponível em

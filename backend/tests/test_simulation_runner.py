@@ -225,6 +225,29 @@ def test_tick_lock_prevents_simultaneous_execution(
     assert maximum_active == 1
 
 
+def test_independent_controllers_take_turns_from_durable_checkpoint(
+    test_engine: Engine, db_session: Session
+) -> None:
+    """Separate worker controllers must process consecutive persisted instants."""
+    first = SimulationController(SimulationClock(initial_instant=INSTANT))
+    second = SimulationController(SimulationClock(initial_instant=INSTANT))
+    first.clock.start()
+    second.clock.start()
+
+    assert first.tick(db_session) is not None
+    assert second.tick(db_session) is not None
+
+    with Session(test_engine) as db:
+        state = db.scalar(select(SimulationState))
+        assert state is not None
+        assert state.last_tick.replace(tzinfo=INSTANT.tzinfo) == INSTANT + first.clock.tick_duration
+        assert state.current_instant.replace(tzinfo=INSTANT.tzinfo) == (
+            INSTANT + first.clock.tick_duration * 2
+        )
+    assert first.clock.current_instant == INSTANT + first.clock.tick_duration
+    assert second.clock.current_instant == INSTANT + second.clock.tick_duration * 2
+
+
 @pytest.mark.anyio
 async def test_automatic_tick_preserves_energy_invariants(
     test_engine: Engine, db_session: Session
