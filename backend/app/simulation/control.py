@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.energy import EnergyReading, SolarReading
 from app.models.prediction import SystemConfiguration
+from app.models.simulation import SimulationState
 from app.services.energy_allocation import EqualSharePowerResolver
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.energy_data import SimulationEnergyDataProvider
@@ -57,8 +58,42 @@ class SimulationController:
         return task is not None and not task.done()
 
     async def startup(self) -> None:
-        """Initialize process-local runner resources for the FastAPI lifecycle."""
-
+        """Restore the last committed clock checkpoint without restarting ticks."""
+        with self.lock, self._session_factory() as db:
+            checkpoint = db.scalar(select(SimulationState).limit(1))
+            if checkpoint is not None:
+                current = checkpoint.current_instant
+                if current.tzinfo is None:
+                    current = current.replace(tzinfo=UTC)
+                self.clock = SimulationClock(
+                    initial_instant=current,
+                    simulation_speed=self.clock.simulation_speed,
+                    real_tick_interval=self.clock.real_tick_interval,
+                )
+                last_tick = checkpoint.last_tick
+                self.last_tick = (
+                    last_tick.replace(tzinfo=UTC)
+                    if last_tick is not None and last_tick.tzinfo is None
+                    else last_tick
+                )
+            else:
+                latest_energy = db.scalar(select(func.max(EnergyReading.timestamp)))
+                latest_solar = db.scalar(select(func.max(SolarReading.timestamp)))
+                latest = max(
+                    (
+                        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+                        for value in (latest_energy, latest_solar)
+                        if value is not None
+                    ),
+                    default=None,
+                )
+                if latest is not None:
+                    self.clock = SimulationClock(
+                        initial_instant=latest + self.clock.tick_duration,
+                        simulation_speed=self.clock.simulation_speed,
+                        real_tick_interval=self.clock.real_tick_interval,
+                    )
+                    self.last_tick = latest
         logger.info("simulation_controller_started")
 
     async def shutdown(self) -> None:
@@ -147,6 +182,13 @@ class SimulationController:
                 real_tick_interval=self.clock.real_tick_interval,
             )
             self.last_tick = None
+            checkpoint = db.scalar(select(SimulationState).limit(1))
+            if checkpoint is None:
+                db.add(SimulationState(current_instant=next_instant, last_tick=None))
+            else:
+                checkpoint.current_instant = next_instant
+                checkpoint.last_tick = None
+            db.commit()
             logger.info("simulation_reset", extra={"simulated_at": next_instant.isoformat()})
             return True
 

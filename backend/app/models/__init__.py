@@ -3,6 +3,7 @@
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargerStatus, ChargingStation
 from app.models.prediction import DemandPrediction, DemandRiskLevel, SystemConfiguration
+from app.models.simulation import SimulationState
 from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
 
@@ -22,6 +23,7 @@ __all__ = [
     "InvoiceStatus",
     "SolarReading",
     "SystemConfiguration",
+    "SimulationState",
     "Tariff",
     "User",
     "UserRole",

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.energy import ChargingSession, EnergyReading
 from app.models.infrastructure import ChargingStation
+from app.models.simulation import SimulationState
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.control import SimulationController
 from app.simulation.tick import TickResult
@@ -148,6 +149,33 @@ async def test_shutdown_cancels_waiting_runner_cleanly(
     await control.shutdown()
     assert control.clock.state is SimulationClockState.STOPPED
     assert not control.runner_active
+
+
+@pytest.mark.anyio
+async def test_startup_restores_committed_clock_checkpoint_after_restart(
+    test_engine: Engine, db_session: Session
+) -> None:
+    seed_charging_session(db_session)
+    wait = ControlledWait()
+    original, factory = make_controller(test_engine, wait)
+    original.clock.start()
+    original.tick(db_session)
+    original.clock.stop()
+    checkpoint = factory()
+    state = checkpoint.query(SimulationState).one()
+    expected_current = INSTANT + original.clock.tick_duration
+    assert state.current_instant.replace(tzinfo=INSTANT.tzinfo) == expected_current
+    assert state.last_tick.replace(tzinfo=INSTANT.tzinfo) == INSTANT
+    checkpoint.close()
+
+    # A separately constructed controller simulates a process restart.
+    restarted, _ = make_controller(test_engine, ControlledWait())
+    assert restarted.clock.current_instant == INSTANT
+    assert restarted.last_tick is None
+    await restarted.startup()
+    assert restarted.clock.current_instant == expected_current
+    assert restarted.last_tick == INSTANT
+    assert restarted.clock.state is SimulationClockState.STOPPED
 
 
 def test_tick_lock_prevents_simultaneous_execution(

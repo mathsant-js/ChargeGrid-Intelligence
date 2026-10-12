@@ -175,6 +175,14 @@ relógio avança apenas depois do commit. O chamador deve passar uma sessão de
 banco sem transação ativa e um relógio iniciado; em caso de erro pode repetir
 o mesmo tick após corrigir a causa.
 
+O checkpoint do relógio (instante atual e último tick) é persistido na mesma
+transação das leituras de cada tick. Após reiniciar o backend, o simulador
+restaura esse instante e o último tick, permanecendo `STOPPED` até um ADMIN
+chamar `POST /start`. Para bancos anteriores à migration do checkpoint, a
+inicialização deriva a posição da maior leitura energética ou solar existente,
+avança um intervalo e continua parada. `POST /reset` também persiste o novo
+instante sem apagar leituras históricas.
+
 Na Fase 5, a sessão captura a tarifa ativa válida no início. Ao encerrar, o
 backend calcula o custo Pay-per-Use, cria uma invoice `CLOSED` e registra um
 alerta na mesma transação. O histórico de invoices está disponível em

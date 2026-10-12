@@ -20,6 +20,7 @@ from app.models.alert import Alert, AlertSeverity, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
+from app.models.simulation import SimulationState
 from app.models.vehicle import Vehicle
 from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.services.energy_readings import ABSOLUTE_TOLERANCE, build_energy_reading_data
@@ -186,8 +187,7 @@ def execute_tick(
                     )
                 if (
                     grid_total / locked_station.grid_limit_kw >= high_demand_threshold
-                    and previous_grid_power / locked_station.grid_limit_kw
-                    < high_demand_threshold
+                    and previous_grid_power / locked_station.grid_limit_kw < high_demand_threshold
                 ):
                     db.add(
                         Alert(
@@ -254,6 +254,17 @@ def execute_tick(
                     session.grid_energy_kwh += reading.grid_energy_kwh
                     created += 1
                 processed += 1
+            checkpoint = db.scalar(select(SimulationState).limit(1))
+            if checkpoint is None:
+                db.add(
+                    SimulationState(
+                        current_instant=timestamp + clock.tick_duration,
+                        last_tick=timestamp,
+                    )
+                )
+            else:
+                checkpoint.current_instant = timestamp + clock.tick_duration
+                checkpoint.last_tick = timestamp
         clock.advance()
     except Exception:
         logger.exception("simulation_tick_failed", extra={"tick_timestamp": timestamp.isoformat()})
