@@ -27,6 +27,8 @@ async def test_openapi_is_available() -> None:
     assert "/api/v1/predictions/demand" in paths
     assert "/api/v1/predictions/demand/run" in paths
     assert "/api/v1/system-configuration" in paths
+    assert "/api/v1/tariffs" in paths
+    assert "/api/v1/tariffs/{tariff_id}" in paths
     assert "/api/v1/billing/invoices" in paths
     assert "/api/v1/billing/invoices/{invoice_id}" in paths
 
@@ -66,6 +68,10 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/system-configuration", "get"),
         ("/api/v1/system-configuration", "post"),
         ("/api/v1/system-configuration", "patch"),
+        ("/api/v1/tariffs", "get"),
+        ("/api/v1/tariffs", "post"),
+        ("/api/v1/tariffs/{tariff_id}", "get"),
+        ("/api/v1/tariffs/{tariff_id}", "patch"),
     }
     for path, method in protected_operations:
         assert paths[path][method]["security"] == bearer
@@ -109,6 +115,8 @@ async def test_openapi_is_available() -> None:
         ("/api/v1/system-configuration", "get"): {"401", "403", "404"},
         ("/api/v1/system-configuration", "post"): {"401", "403", "409"},
         ("/api/v1/system-configuration", "patch"): {"401", "403", "404"},
+        ("/api/v1/tariffs", "get"): {"401"},
+        ("/api/v1/tariffs/{tariff_id}", "get"): {"401", "404"},
     }
     for (path, method), expected_statuses in expected_error_responses.items():
         responses = paths[path][method]["responses"]

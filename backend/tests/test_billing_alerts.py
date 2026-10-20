@@ -204,6 +204,31 @@ async def test_only_admin_can_change_tariffs(client: AsyncClient, db_session: Se
 
 
 @pytest.mark.anyio
+async def test_tariff_queries_require_authentication_and_allow_user_and_admin(
+    client: AsyncClient, db_session: Session
+) -> None:
+    tariff = db_session.query(Tariff).one()
+    user = add_user(db_session, email="tariff-reader@example.com")
+    user_headers = await login_headers(client, user.email)
+    admin_headers = await login_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+
+    client.headers.pop("Authorization")
+    for path in ("/api/v1/tariffs", f"/api/v1/tariffs/{tariff.id}"):
+        anonymous = await client.get(path)
+        assert anonymous.status_code == 401
+        assert anonymous.headers["www-authenticate"] == "Bearer"
+
+        user_response = await client.get(path, headers=user_headers)
+        assert user_response.status_code == 200
+
+        admin_response = await client.get(path, headers=admin_headers)
+        assert admin_response.status_code == 200
+
+    assert user_response.json()["id"] == str(tariff.id)
+    assert admin_response.json()["id"] == str(tariff.id)
+
+
+@pytest.mark.anyio
 async def test_database_rejects_two_active_tariffs(
     db_session: Session, client: AsyncClient
 ) -> None:

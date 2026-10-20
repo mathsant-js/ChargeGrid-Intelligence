@@ -31,8 +31,12 @@ def deactivate_other_tariffs(db: DbSession, tariff_id: UUID | None = None) -> No
     db.execute(statement.values(is_active=False))
 
 
-@router.get("/tariffs", response_model=list[TariffResponse])
-async def list_tariffs(db: DbSession) -> list[Tariff]:
+@router.get(
+    "/tariffs",
+    response_model=list[TariffResponse],
+    responses=UNAUTHORIZED_RESPONSE,
+)
+async def list_tariffs(db: DbSession, _current_user: CurrentUser) -> list[Tariff]:
     return list(db.scalars(select(Tariff).order_by(Tariff.created_at, Tariff.id)).all())
 
 
@@ -47,8 +51,12 @@ async def create_tariff(payload: TariffCreate, db: DbSession, _admin: AdminUser)
     return tariff
 
 
-@router.get("/tariffs/{tariff_id}", response_model=TariffResponse)
-async def get_tariff(tariff_id: UUID, db: DbSession) -> Tariff:
+@router.get(
+    "/tariffs/{tariff_id}",
+    response_model=TariffResponse,
+    responses=UNAUTHORIZED_RESPONSE | NOT_FOUND_RESPONSE,
+)
+async def get_tariff(tariff_id: UUID, db: DbSession, _current_user: CurrentUser) -> Tariff:
     return get_or_404(db, Tariff, tariff_id)
 
 
