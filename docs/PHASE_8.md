@@ -1,5 +1,8 @@
 # Fase 8 — ESG e alertas
 
+> **Registro histórico.** Preserva critérios e resultados da Fase 8. Contagens
+> de testes abaixo são evidências datadas, não o estado da suíte atual.
+
 ## Escopo consolidado
 
 O relatório `GET /api/v1/analytics/sustainability` aceita `station_id`, `from` e `to` e apresenta energia total, solar e da rede, participação solar, CO₂ evitado, fator de emissão utilizado e economia solar estimada. O fator de emissão vem exclusivamente de `SystemConfiguration`; na ausência dessa configuração, a API retorna `503` em vez de aplicar um valor ambiental implícito.

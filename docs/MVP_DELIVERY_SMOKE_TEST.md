@@ -1,5 +1,7 @@
 # Validação automatizada da entrega do MVP
 
+**Classificação:** procedimento operacional vigente.
+
 O smoke test de entrega executa a aplicação real contra PostgreSQL 16 e percorre,
 por HTTP público, o Golden Path definido em `SPEC.md`. Ele é propositalmente
 separado dos testes unitários e de integração rápidos executados por `make check`.
@@ -25,6 +27,13 @@ O comando:
 7. valida health, autenticação, energia, alertas, previsão, encerramento,
    billing, ESG, dashboards, OpenAPI e frontend;
 8. remove containers, rede e volumes que pertencem somente ao projeto do teste.
+
+Para uma apresentação com o ambiente mantido no ar, execute a seção
+“Reprodução em banco de demo limpo” do
+[`roteiro manual da Sprint 3`](sprint-3/README.md). Embora o restante daquele
+documento seja evidência histórica da entrega, essa seção é o complemento
+manual vigente deste guia. Não execute o smoke e o roteiro manual sobre o mesmo
+banco.
 
 Nesse ambiente, o intervalo do runner automático é elevado para uma hora para
 não competir com os três ticks manuais determinísticos. Isso não altera a

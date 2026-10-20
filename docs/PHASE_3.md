@@ -1,5 +1,8 @@
 # Fase 3 — Simulação e leituras
 
+> **Registro histórico.** Preserva decisões e evidências da fase. Para o
+> comportamento consolidado, consulte [Arquitetura vigente](ARCHITECTURE.md).
+
 ## Escopo entregue
 
 O backend possui relógio simulado determinístico, curva solar por estação, serviço de tick transacional e APIs de leitura de energia e solar. O controle administrativo fica em `/api/v1/simulation`: `GET /status`, `POST /start`, `POST /stop`, `POST /reset` e `POST /ticks` (um tick manual). Todos exigem JWT de ADMIN; token ausente ou inválido retorna 401 e USER retorna 403. Os contratos e erros esperados aparecem no OpenAPI.

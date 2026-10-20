@@ -1,5 +1,9 @@
 # Fase 7 — Dataset, baseline e treinamento
 
+> **Registro histórico.** Preserva decisões, comandos e resultados da Fase 7.
+> Para preparar a demo atual, siga
+> [Validação automatizada do MVP](MVP_DELIVERY_SMOKE_TEST.md).
+
 Esta fase implementa a geração reproduzível do dataset temporal, avaliação do
 baseline, treinamento e persistência do artefato, além da inferência consultiva
 integrada à aplicação.

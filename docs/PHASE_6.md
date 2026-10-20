@@ -1,5 +1,8 @@
 # Fase 6 — Integração e limites
 
+> **Registro histórico.** As limitações desta entrega são preservadas como
+> evidência e não descrevem necessariamente o MVP consolidado.
+
 **Estado histórico da entrega:** concluída quanto a dashboards e integração;
 o risco de pico, então dependente da Fase 7, foi posteriormente implementado e
 validado. Consulte `PHASE_7.md` e `PHASE_9.md` para o estado final do MVP.

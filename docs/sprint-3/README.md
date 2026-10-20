@@ -1,5 +1,11 @@
 # Sprint 3 — demonstração reproduzível
 
+> **Material histórico com roteiro manual mantido.** A entrega, integrantes,
+> imagens e resultados registram a Sprint 3. Para validação automatizada atual,
+> prefira [`make mvp-smoke`](../MVP_DELIVERY_SMOKE_TEST.md). A seção de
+> reprodução abaixo continua sendo o procedimento vigente quando a demo precisa
+> permanecer aberta para apresentação.
+
 **Equipe:** Equipe 3 (FIAP × GoodWe)  
 **Disciplina:** Pensamento Computacional e Automação com Python
 
@@ -22,7 +28,15 @@ Este roteiro demonstra, por simulação, o cenário energético de `SPEC.md` §�
 
 ## Reprodução em banco de demo limpo
 
-Use um banco isolado e um único processo controlador da API. Edite `.env` localmente para definir `APP_ENV=demo`, `DEMO_SIMULATION_START_UTC=2026-09-18T11:58:00Z` e `GRID_EMISSION_FACTOR_KG_PER_KWH=0.4`. O relógio determinístico só é aceito quando `APP_ENV=demo` (ou no ambiente isolado da suíte); desenvolvimento comum, staging e produção rejeitam essa configuração. O horário é deliberadamente próximo do pico solar UTC. O fator da API vem dessa variável de ambiente; o seed registra o mesmo 0,4 em `SystemConfiguration`. Guarde `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` somente no ambiente, com pelo menos oito caracteres cada.
+Use um banco isolado e um único processo controlador da API. Edite `.env`
+localmente para definir `APP_ENV=demo` e
+`DEMO_SIMULATION_START_UTC=2026-09-18T11:58:00Z`. O relógio determinístico só
+é aceito quando `APP_ENV=demo` (ou no ambiente isolado da suíte);
+desenvolvimento comum, staging e produção rejeitam essa configuração. O horário
+é deliberadamente próximo do pico solar UTC. O seed registra o fator de emissão
+0,4 em `SystemConfiguration`, que é a fonte usada pela API. Guarde
+`DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` somente no ambiente, com pelo
+menos oito caracteres cada.
 
 ```bash
 cp .env.example .env

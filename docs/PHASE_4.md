@@ -1,5 +1,9 @@
 # Fase 4 — Gestão energética
 
+> **Registro histórico.** O texto registra o comportamento no fechamento desta
+> fase. A simulação automática foi acrescentada depois; consulte
+> [Arquitetura vigente](ARCHITECTURE.md) para o estado atual.
+
 ## Comportamento entregue
 
 O tick manual `POST /api/v1/simulation/ticks`, disponível a ADMIN com o relógio

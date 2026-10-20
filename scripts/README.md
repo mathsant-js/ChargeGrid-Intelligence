@@ -1,5 +1,9 @@
 ## Golden Path de ML da Fase 7
 
+> **Referência especializada.** Para preparar a demonstração completa, use o
+> [guia operacional](../docs/MVP_DELIVERY_SMOKE_TEST.md); o comando abaixo cobre
+> apenas a etapa de ML.
+
 Execute a partir de `backend/`:
 
 ```bash

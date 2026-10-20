@@ -1,5 +1,8 @@
 # Fase 5 — Billing e histórico de invoices
 
+> **Registro histórico.** Preserva o aceite e os resultados desta fase.
+> Consulte o [mapa da documentação](README.md) para uso e operação atuais.
+
 **Status: concluída.**
 
 ## Escopo e critérios

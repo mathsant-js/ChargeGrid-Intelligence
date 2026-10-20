@@ -1,5 +1,10 @@
 # Fase 9 — Auditoria final do MVP
 
+> **Registro histórico.** Esta é uma fotografia da auditoria de 25/09/2026.
+> Débitos, contagens e estado do Git abaixo não devem ser interpretados como
+> estado atual. Consulte [Arquitetura vigente](ARCHITECTURE.md) e o
+> [guia atual da demo](MVP_DELIVERY_SMOKE_TEST.md).
+
 **Data da auditoria:** 25/09/2026
 
 **Conclusão:** MVP funcional e demonstrável, com requisitos obrigatórios atendidos e débitos técnicos não bloqueantes explicitados abaixo.

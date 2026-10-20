@@ -1,5 +1,8 @@
 # Fase 6 — Contratos da API de analytics
 
+> **Registro histórico.** Documenta o contrato consolidado durante a Fase 6.
+> Para o contrato executável atual, consulte o OpenAPI da aplicação.
+
 `GET /api/v1/analytics/dashboard` e `GET /api/v1/analytics/sustainability` exigem JWT. ADMIN consulta todas as sessões; USER consulta somente as próprias. O filtro `user_id` é permitido para ADMIN e para o próprio USER; outro ID retorna 404. `station_id` limita os dados aos carregadores da estação indicada. IDs válidos sem registros retornam indicadores zerados.
 
 Ambas as rotas aceitam `station_id`, `user_id`, `from` e `to`. Datas devem incluir fuso horário; os limites são inclusivos e `from` não pode ser posterior a `to` (422). Sem filtros de data, usa-se todo o histórico.
