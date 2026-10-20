@@ -17,11 +17,15 @@ from sklearn.ensemble import (
     RandomForestRegressor,
 )
 
-from app.ml.baseline import RegressionMetrics, chronological_split, regression_metrics
+from app.ml.baseline import (
+    RegressionMetrics,
+    expanding_window_splits,
+    regression_metrics,
+)
 from app.ml.dataset import DemandDatasetRow
 
 logger = logging.getLogger(__name__)
-MODEL_VERSION = "2.0.0"
+MODEL_VERSION = "3.0.0"
 MODEL_FEATURES = (
     "hour",
     "day_of_week",
@@ -32,7 +36,7 @@ MODEL_FEATURES = (
     "solar_available_kw",
 )
 TARGET_COLUMN = "demand_kw_next_60_minutes"
-ARTIFACT_FORMAT_VERSION = 3
+ARTIFACT_FORMAT_VERSION = 4
 SELECTION_METRIC = "rmse"
 BASELINE_NAME = "HistoricalMeanBaseline"
 
@@ -83,8 +87,28 @@ class ModelComparison:
 
 @dataclass(frozen=True, slots=True)
 class SegmentEvaluation:
-    by_hour: dict[str, RegressionMetrics]
-    by_demand_band: dict[str, RegressionMetrics]
+    by_hour: dict[str, "SegmentMetrics"]
+    by_demand_band: dict[str, "SegmentMetrics"]
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentMetrics:
+    rows: int
+    metrics: RegressionMetrics
+
+
+@dataclass(frozen=True, slots=True)
+class FoldEvaluation:
+    fold: int
+    training_period: TrainingPeriod
+    validation_period: TrainingPeriod
+    candidate_metrics: dict[str, RegressionMetrics]
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalEvaluation:
+    strategy: str
+    folds: tuple[FoldEvaluation, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +116,7 @@ class TrainingResult:
     metadata: ModelMetadata
     comparison: ModelComparison
     segments: SegmentEvaluation
+    temporal_evaluation: TemporalEvaluation
 
 
 class DemandFeatureRow(Protocol):
@@ -208,9 +233,14 @@ def _segment_metrics(
         band = "low_<50kw" if actual < 50 else "medium_50-100kw" if actual < 100 else "high_>=100kw"
         band_groups[band].append((actual, predicted))
 
-    def calculate(groups: dict[str, list[tuple[float, float]]]) -> dict[str, RegressionMetrics]:
+    def calculate(groups: dict[str, list[tuple[float, float]]]) -> dict[str, SegmentMetrics]:
         return {
-            name: regression_metrics([pair[0] for pair in pairs], [pair[1] for pair in pairs])
+            name: SegmentMetrics(
+                rows=len(pairs),
+                metrics=regression_metrics(
+                    [pair[0] for pair in pairs], [pair[1] for pair in pairs]
+                ),
+            )
             for name, pairs in groups.items()
         }
 
@@ -225,26 +255,52 @@ def train_and_evaluate(
     test_fraction: float = 0.2,
     random_state: int = 42,
     n_estimators: int = 120,
+    validation_folds: int = 3,
 ) -> TrainingResult:
-    """Evaluate one baseline plus three fixed classical candidates and persist the winner."""
+    """Select simple candidates by causal walk-forward evaluation and persist the winner."""
 
-    train, test = chronological_split(rows, test_fraction)
-    x_train, x_test = _feature_frame(train), _feature_frame(test)
-    y_train = [row.demand_kw_next_60_minutes for row in train]
-    y_test = [row.demand_kw_next_60_minutes for row in test]
-    models: dict[str, Any] = {BASELINE_NAME: HistoricalMeanBaseline.fit(train)}
-    models.update(_candidate_models(random_state, n_estimators))
-    metrics_by_name: dict[str, RegressionMetrics] = {}
-    predictions_by_name: dict[str, list[float]] = {}
-    for name, model in models.items():
-        if name != BASELINE_NAME:
-            model.fit(x_train, y_train)
-        predictions = [float(value) for value in model.predict(x_test)]
-        predictions_by_name[name] = predictions
-        metrics_by_name[name] = regression_metrics(y_test, predictions)
-    if metrics_by_name[BASELINE_NAME] != baseline_metrics:
+    splits = expanding_window_splits(rows, test_fraction, validation_folds)
+    actual_all: list[float] = []
+    predictions_by_name: defaultdict[str, list[float]] = defaultdict(list)
+    fold_evaluations: list[FoldEvaluation] = []
+    for fold_number, (fold_train, fold_test) in enumerate(splits, start=1):
+        x_train, x_test = _feature_frame(fold_train), _feature_frame(fold_test)
+        y_train = [row.demand_kw_next_60_minutes for row in fold_train]
+        y_test = [row.demand_kw_next_60_minutes for row in fold_test]
+        fold_models: dict[str, Any] = {
+            BASELINE_NAME: HistoricalMeanBaseline.fit(fold_train)
+        }
+        fold_models.update(_candidate_models(random_state, n_estimators))
+        fold_metrics: dict[str, RegressionMetrics] = {}
+        for name, model in fold_models.items():
+            if name != BASELINE_NAME:
+                model.fit(x_train, y_train)
+            predictions = [float(value) for value in model.predict(x_test)]
+            predictions_by_name[name].extend(predictions)
+            fold_metrics[name] = regression_metrics(y_test, predictions)
+        actual_all.extend(y_test)
+        fold_evaluations.append(
+            FoldEvaluation(
+                fold=fold_number,
+                training_period=_period(fold_train),
+                validation_period=_period(fold_test),
+                candidate_metrics=fold_metrics,
+            )
+        )
+    metrics_by_name = {
+        name: regression_metrics(actual_all, predictions)
+        for name, predictions in predictions_by_name.items()
+    }
+    if fold_evaluations[-1].candidate_metrics[BASELINE_NAME] != baseline_metrics:
         raise ValueError("baseline metrics must use the same chronological split")
     winner = min(metrics_by_name, key=lambda name: metrics_by_name[name].rmse)
+    train, test = splits[-1]
+    models: dict[str, Any] = {BASELINE_NAME: HistoricalMeanBaseline.fit(train)}
+    models.update(_candidate_models(random_state, n_estimators))
+    if winner != BASELINE_NAME:
+        models[winner].fit(
+            _feature_frame(train), [row.demand_kw_next_60_minutes for row in train]
+        )
     metadata = ModelMetadata(
         artifact_format_version=ARTIFACT_FORMAT_VERSION,
         sklearn_version=sklearn.__version__,
@@ -261,13 +317,15 @@ def train_and_evaluate(
         selection_metric=SELECTION_METRIC,
     )
     comparison = ModelComparison(metrics_by_name, winner, SELECTION_METRIC, winner == BASELINE_NAME)
-    segments = _segment_metrics(test, predictions_by_name[winner])
+    validation_rows = [row for _, fold_test in splits for row in fold_test]
+    segments = _segment_metrics(validation_rows, predictions_by_name[winner])
+    temporal_evaluation = TemporalEvaluation("expanding_window", tuple(fold_evaluations))
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": models[winner], "metadata": asdict(metadata)}, artifact_path)
     logger.info(
         "Demand model selection completed: winner=%s rmse=%.6f", winner, metadata.metrics.rmse
     )
-    return TrainingResult(metadata, comparison, segments)
+    return TrainingResult(metadata, comparison, segments, temporal_evaluation)
 
 
 def _metadata_from_dict(value: object) -> ModelMetadata:

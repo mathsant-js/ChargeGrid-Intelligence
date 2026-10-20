@@ -53,6 +53,46 @@ def chronological_split(
     return rows[:train_end], rows[split_index:]
 
 
+def expanding_window_splits(
+    rows: Sequence[DemandDatasetRow],
+    test_fraction: float = 0.2,
+    folds: int = 3,
+    purge_steps: int = HORIZON_STEPS,
+) -> list[tuple[Sequence[DemandDatasetRow], Sequence[DemandDatasetRow]]]:
+    """Build causal walk-forward folds with expanding training windows.
+
+    Validation windows are contiguous, equally sized, and located at the end of
+    the series. A purge gap equal to the forecast horizon prevents a training
+    label from reaching its following validation window.
+    """
+    if not 0 < test_fraction < 1:
+        raise ValueError("test_fraction must be between zero and one")
+    if folds < 2:
+        raise ValueError("folds must be at least two")
+    if purge_steps < 0:
+        raise ValueError("purge_steps must be nonnegative")
+    if any(
+        current.timestamp <= previous.timestamp
+        for previous, current in zip(rows, rows[1:], strict=False)
+    ):
+        raise ValueError("rows must be strictly ordered by timestamp")
+    # Match chronological_split's boundary exactly, including floating-point
+    # rounding for small datasets.
+    validation_rows = len(rows) - int(len(rows) * (1 - test_fraction))
+    first_validation = len(rows) - folds * validation_rows
+    if validation_rows < 1 or first_validation - purge_steps < 1:
+        raise ValueError("rows must cover expanding train, purge gaps, and validation folds")
+    return [
+        (
+            rows[: validation_start - purge_steps],
+            rows[validation_start : validation_start + validation_rows],
+        )
+        for validation_start in (
+            first_validation + fold_index * validation_rows for fold_index in range(folds)
+        )
+    ]
+
+
 def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> RegressionMetrics:
     if len(actual) != len(predicted) or not actual:
         raise ValueError("actual and predicted must have the same nonzero length")

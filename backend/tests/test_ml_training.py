@@ -57,7 +57,6 @@ def test_training_reports_required_metrics_and_baseline_comparison(
     assert result.metadata.metrics.mae >= 0
     assert result.metadata.metrics.rmse >= 0
     assert result.metadata.metrics.r2 == pytest.approx(result.metadata.metrics.r2)
-    assert result.comparison.candidates[BASELINE_NAME] == baseline.metrics
     assert result.metadata.metrics == result.comparison.candidates[result.comparison.winner]
     assert all(
         metrics.mae >= 0 and metrics.rmse >= 0 for metrics in result.comparison.candidates.values()
@@ -66,6 +65,12 @@ def test_training_reports_required_metrics_and_baseline_comparison(
     assert result.comparison.winner == min(
         result.comparison.candidates,
         key=lambda name: result.comparison.candidates[name].rmse,
+    )
+    assert result.temporal_evaluation.strategy == "expanding_window"
+    assert len(result.temporal_evaluation.folds) == 3
+    assert result.temporal_evaluation.folds[-1].candidate_metrics[BASELINE_NAME] == baseline.metrics
+    assert sum(segment.rows for segment in result.segments.by_demand_band.values()) == sum(
+        fold.validation_period.rows for fold in result.temporal_evaluation.folds
     )
 
 
@@ -101,7 +106,7 @@ def test_baseline_can_win_and_is_persisted(
     loaded = load_model_artifact(tmp_path / "baseline.joblib")
     assert result.comparison.baseline_won is True
     assert result.comparison.winner == BASELINE_NAME
-    assert result.metadata.metrics == baseline.metrics
+    assert result.metadata.metrics == result.comparison.candidates[BASELINE_NAME]
     assert len(loaded.predict(dataset[-2:])) == 2
 
 

@@ -11,14 +11,17 @@ integrada à aplicação.
   intervalos à frente;
 - `historical_avg_demand_kw` usa apenas observações anteriores do mesmo par
   hora/dia da semana;
-- split cronológico de 80% para treino e 20% para teste, sem embaralhamento,
-  com purge gap de 12 linhas/60 minutos para que nenhum target de treino alcance
-  a janela de teste;
+- backtesting temporal com três folds walk-forward, treino expansivo e janelas
+  contíguas de 20%, sem embaralhamento;
+- cada fold aplica purge gap de 12 linhas/60 minutos para que nenhum target de
+  treino alcance sua janela de validação;
 - baseline pela média do target no treino para hora + dia da semana;
 - gerador sintético isolado do alocador de produção;
 - baseline, `RandomForestRegressor`, `ExtraTreesRegressor` e
-  `HistGradientBoostingRegressor` avaliados na mesma janela cronológica;
-- seleção automática pelo menor RMSE, incluindo o baseline como possível vencedor;
+  `HistGradientBoostingRegressor` avaliados nas mesmas três janelas cronológicas;
+- seleção automática pelo menor RMSE agregado das previsões fora da amostra,
+  incluindo o baseline como possível vencedor;
+- métricas por fold e por faixa de demanda incluem quantidade de observações;
 - features do modelo restritas às sete features mínimas da SPEC;
 - artefato Joblib contém o vencedor, versão de formato e do scikit-learn,
   contrato ordenado de features, target, horizonte, seed, períodos e métricas
@@ -48,9 +51,11 @@ cd backend
   --artifact ../data/models/demand_forecast.joblib
 ```
 
-Os parâmetros `--days`, `--seed`, `--test-fraction`, `--dataset`, `--metadata` e `--artifact`
-podem ser configurados. Os CSVs e JSONs gerados sob `data/` são ignorados pelo
-Git; apenas `.gitkeep` é versionado.
+Os parâmetros `--days`, `--seed`, `--test-fraction`, `--dataset`, `--metadata` e
+`--artifact` podem ser configurados. `--test-fraction` define o tamanho de cada
+uma das três janelas; a configuração precisa deixar dados anteriores suficientes
+para o primeiro treino e seu gap. Os CSVs e JSONs gerados sob `data/` são
+ignorados pelo Git; apenas `.gitkeep` é versionado.
 
 Para a demonstração oficial, depois das migrations e de `app.demo_seed`, use o
 comando idempotente abaixo antes de iniciar a API. Além do pipeline acima, ele
@@ -92,17 +97,17 @@ substituir as invariantes determinísticas de energia.
 
 ## Resultado reproduzido
 
-O relatório atualizado, com os quatro candidatos, análise por faixa de demanda
-e limitações, está em [ML_EVALUATION.md](ML_EVALUATION.md). O ganho observado é
-pequeno e não altera o caráter consultivo da previsão.
+O relatório atualizado, com os quatro candidatos, variação entre folds, análise
+por faixa de demanda e limitações, está em [ML_EVALUATION.md](ML_EVALUATION.md).
+O ganho observado é pequeno e não altera o caráter consultivo da previsão.
 
-Validação executada:
+Validação focada executada:
 
 ```bash
 cd backend
-.venv/bin/ruff check .
-.venv/bin/mypy app
-.venv/bin/pytest -q
+.venv/bin/ruff check app/ml tests/test_ml_dataset.py tests/test_ml_training.py
+.venv/bin/mypy app/ml
+.venv/bin/pytest -q tests/test_ml_dataset.py tests/test_ml_training.py
 ```
 
-Resultados atuais: Ruff sem erros, mypy sem erros em 75 arquivos e `220 passed`.
+Resultados atuais: Ruff sem erros, mypy sem erros em 6 arquivos e `20 passed`.

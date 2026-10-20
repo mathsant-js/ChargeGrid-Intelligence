@@ -7,6 +7,7 @@ import pytest
 from app.ml.baseline import (
     chronological_split,
     evaluate_hour_weekday_baseline,
+    expanding_window_splits,
     regression_metrics,
 )
 from app.ml.dataset import (
@@ -94,6 +95,19 @@ def test_chronological_split_has_no_overlap(dataset: list[DemandDatasetRow]) -> 
     assert len(train) + len(test) + HORIZON_STEPS == len(dataset)
 
 
+def test_expanding_window_splits_are_causal_and_non_overlapping(
+    dataset: list[DemandDatasetRow],
+) -> None:
+    splits = expanding_window_splits(dataset, test_fraction=0.2, folds=3)
+
+    assert len(splits) == 3
+    assert [len(train) for train, _ in splits] == sorted(len(train) for train, _ in splits)
+    for index, (train, validation) in enumerate(splits):
+        assert train[-1].timestamp + timedelta(minutes=60) < validation[0].timestamp
+        if index:
+            assert splits[index - 1][1][-1].timestamp < validation[0].timestamp
+
+
 def test_baseline_metrics_are_calculated_correctly() -> None:
     metrics = regression_metrics([1.0, 2.0, 3.0], [1.0, 2.0, 4.0])
     assert metrics.mae == pytest.approx(1 / 3)
@@ -136,3 +150,5 @@ def test_pipeline_writes_dataset_and_training_metadata(tmp_path: Path) -> None:
     assert metadata_path.is_file()
     assert metadata["dataset"]["rows"] == 24 * 12
     assert metadata["baseline"]["train_end"] < metadata["baseline"]["test_start"]
+    assert metadata["temporal_evaluation"]["strategy"] == "expanding_window"
+    assert len(metadata["temporal_evaluation"]["folds"]) == 3
