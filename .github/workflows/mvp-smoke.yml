@@ -1,12 +1,18 @@
 name: MVP delivery smoke
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
   delivery-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: mvp-delivery-smoke-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - name: Validate the real MVP on isolated PostgreSQL 16

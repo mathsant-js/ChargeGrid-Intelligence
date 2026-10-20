@@ -1,13 +1,14 @@
 """Automatic simulation runner coordination without wall-clock sleeps."""
 
 import asyncio
+from datetime import timedelta
 from threading import Event, Lock, Thread
 
 import pytest
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models.energy import ChargingSession, EnergyReading
+from app.models.energy import ChargingSession, EnergyReading, SolarReading
 from app.models.infrastructure import ChargingStation
 from app.models.simulation import SimulationState
 from app.simulation.clock import SimulationClock, SimulationClockState
@@ -176,6 +177,29 @@ async def test_startup_restores_committed_clock_checkpoint_after_restart(
     assert restarted.clock.current_instant == expected_current
     assert restarted.last_tick == INSTANT
     assert restarted.clock.state is SimulationClockState.STOPPED
+
+
+@pytest.mark.anyio
+async def test_startup_does_not_rewind_configured_demo_clock_to_historical_solar_reading(
+    test_engine: Engine, db_session: Session
+) -> None:
+    station = ChargingStation(name="Historical fixture", grid_limit_kw=60)
+    db_session.add(station)
+    db_session.flush()
+    db_session.add(
+        SolarReading(
+            station_id=station.id,
+            timestamp=INSTANT.replace(tzinfo=None) - timedelta(days=7),
+            available_power_kw=20,
+        )
+    )
+    db_session.commit()
+
+    control, _ = make_controller(test_engine, ControlledWait())
+    await control.startup()
+
+    assert control.clock.current_instant == INSTANT
+    assert control.last_tick is None
 
 
 def test_tick_lock_prevents_simultaneous_execution(

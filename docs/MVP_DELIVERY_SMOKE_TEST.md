@@ -71,11 +71,18 @@ Problemas comuns:
 
 ## CI
 
-O workflow `MVP delivery smoke` é manual (`workflow_dispatch`) e possui timeout
-de 20 minutos. Ele não roda em todo push ou pull request: builds Docker, treino
-do artefato e inicialização PostgreSQL são mais caros que a suíte rápida. Use-o
-como gate explícito de entrega/release, mantendo o workflow `CI` como feedback
-rápido de desenvolvimento.
+O workflow `MVP delivery smoke` roda automaticamente em push para `main` e em
+pull requests, além de poder ser iniciado manualmente (`workflow_dispatch`).
+Possui timeout de 20 minutos e executa `make mvp-smoke` em runner hospedado do
+GitHub. Assim, cada execução valida o caminho real com PostgreSQL 16, além da
+suíte rápida do workflow `CI`.
+
+O job usa concorrência por workflow e referência Git: uma execução mais nova
+da mesma referência pode cancelar a anterior. Cada execução do script cria seu
+próprio projeto Compose com nome derivado do PID, credenciais aleatórias e
+volumes nomeados isolados. O trap de saída remove somente os recursos daquele
+projeto com `docker compose down --volumes --remove-orphans`; não usa volumes
+compartilhados nem executa limpeza global do Docker.
 
 ## Resultado verificado
 

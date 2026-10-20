@@ -89,11 +89,15 @@ class SimulationController:
                 )
                 if latest is not None:
                     self.clock = SimulationClock(
-                        initial_instant=latest + self.clock.tick_duration,
+                        initial_instant=max(
+                            self.clock.initial_instant,
+                            latest + self.clock.tick_duration,
+                        ),
                         simulation_speed=self.clock.simulation_speed,
                         real_tick_interval=self.clock.real_tick_interval,
                     )
-                    self.last_tick = latest
+                    if self.clock.current_instant == latest + self.clock.tick_duration:
+                        self.last_tick = latest
         logger.info("simulation_controller_started")
 
     async def shutdown(self) -> None:
