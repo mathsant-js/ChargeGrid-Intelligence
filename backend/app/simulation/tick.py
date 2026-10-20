@@ -79,15 +79,21 @@ def execute_tick(
             checkpoint = db.scalar(
                 select(SimulationState).order_by(SimulationState.singleton_key).limit(1).with_for_update()
             )
-            if db.bind is not None and db.bind.dialect.name == "postgresql":
-                if checkpoint is None:
-                    # Serialize first-time creation too; the singleton key has
-                    # a unique constraint, while this transaction lock avoids
-                    # workers racing to insert it on the initial tick.
-                    db.execute(text("LOCK TABLE simulation_state IN SHARE ROW EXCLUSIVE MODE"))
-                    checkpoint = db.scalar(
-                        select(SimulationState).order_by(SimulationState.singleton_key).limit(1).with_for_update()
-                    )
+            if (
+                db.bind is not None
+                and db.bind.dialect.name == "postgresql"
+                and checkpoint is None
+            ):
+                # Serialize first-time creation too; the singleton key has a
+                # unique constraint, while this transaction lock avoids workers
+                # racing to insert it on the initial tick.
+                db.execute(text("LOCK TABLE simulation_state IN SHARE ROW EXCLUSIVE MODE"))
+                checkpoint = db.scalar(
+                    select(SimulationState)
+                    .order_by(SimulationState.singleton_key)
+                    .limit(1)
+                    .with_for_update()
+                )
             if checkpoint is not None:
                 persisted_instant = checkpoint.current_instant
                 if persisted_instant.tzinfo is None and timestamp.tzinfo is not None:

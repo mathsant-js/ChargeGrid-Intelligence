@@ -33,6 +33,13 @@ stop, reset e tick manual; enquanto está `RUNNING`, também mantém um runner
 assíncrono. O estado do relógio e o último tick são persistidos, e o PostgreSQL
 serializa ticks concorrentes pelo checkpoint do simulador.
 
+O checkpoint persistido é a autoridade após reinício ou quando o relógio de um
+worker está atrasado. Cada execução bem-sucedida consome exatamente o instante
+do checkpoint e o avança por uma duração de tick. Se um instante já concluído
+for reapresentado, as leituras únicas por `(station_id, timestamp)` e
+`(session_id, timestamp)` impedem nova energia; checkpoint, leituras e
+acumuladores são confirmados ou revertidos na mesma transação.
+
 `SimulationEnergyDataProvider` calcula geração solar simulada por uma curva
 UTC. `EqualSharePowerResolver` aplica os limites da rede, do carregador, do
 veículo e do pedido, redistribui sobras e prioriza a energia solar.

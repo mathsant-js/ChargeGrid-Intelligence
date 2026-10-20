@@ -24,6 +24,11 @@ compose() {
 cleanup() {
   local exit_code=$?
   trap - EXIT
+  if (( exit_code != 0 )); then
+    echo "[diagnostics] Service status and logs before cleanup" >&2
+    compose ps >&2 || true
+    compose logs --no-color db backend frontend >&2 || true
+  fi
   echo "[cleanup] Removing only Compose project: $PROJECT_NAME"
   compose down --volumes --remove-orphans --timeout 10 || true
   if (( exit_code != 0 )); then

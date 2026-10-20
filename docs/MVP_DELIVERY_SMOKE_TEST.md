@@ -23,7 +23,7 @@ O comando:
 4. executa `alembic upgrade head`, `alembic current --check-heads` e
    `alembic check` separadamente;
 5. executa o seed e o preparo determinístico do modelo de demonstração;
-6. inicia backend e frontend reais;
+6. inicia backend e frontend reais e aguarda os healthchecks HTTP de ambos;
 7. valida health, autenticação, energia, alertas, previsão, encerramento,
    billing, ESG, dashboards, OpenAPI e frontend;
 8. remove containers, rede e volumes que pertencem somente ao projeto do teste.
@@ -56,12 +56,18 @@ referenciados.
 Cada operação começa com `[stage]`. Em caso de erro, a última linha
 `[failed] Stage: ...` identifica a etapa. O roteiro HTTP inclui o domínio da
 asserção em mensagens como `[energy conservation]` e `[billing amount]`.
-Não há retry de operações mutáveis. O único polling é o healthcheck limitado
-de startup (20 tentativas no Compose e 30 segundos no cliente HTTP).
+Não há retry de operações mutáveis. O `compose up --wait` é a barreira de
+prontidão: backend e frontend possuem healthchecks HTTP com `start_period` de
+5 segundos, intervalo de 2 segundos, timeout de 3 segundos e 20 tentativas.
+O cliente HTTP ainda limita a espera inicial da API a 30 segundos e repete no
+máximo três vezes somente os GETs de OpenAPI e frontend quando ocorre falha
+transitória de conexão.
 
-Para preservar os containers temporariamente durante investigação, execute os
-comandos do arquivo `scripts/mvp_smoke.sh` manualmente; o fluxo oficial sempre
-faz cleanup. Durante uma falha, os logs aparecem antes do cleanup com:
+Em qualquer falha, o fluxo oficial imprime automaticamente `compose ps` e os
+logs de banco, backend e frontend antes do cleanup. Para preservar os
+containers temporariamente durante investigação, execute os comandos do
+arquivo `scripts/mvp_smoke.sh` manualmente; o fluxo oficial sempre faz cleanup.
+O comando equivalente usado no diagnóstico automático é:
 
 ```bash
 docker compose --project-name <nome-mostrado-no-log> \
@@ -74,7 +80,8 @@ Problemas comuns:
 - `address already in use`: configure as duas portas alternativas acima;
 - `Apply migrations` ou `Verify alembic metadata`: revise a migration indicada;
 - `Prepare ML artifact`: confirme espaço em disco e examine a saída de métricas;
-- `Start real backend and frontend`: examine os healthchecks e logs do serviço;
+- `Start real backend and frontend`: identifique em `compose ps` qual serviço
+  não ficou healthy e examine os logs automáticos impressos antes do cleanup;
 - `public-API Golden Path`: a mensagem entre colchetes identifica o contrato
   funcional que divergiu.
 
@@ -93,9 +100,10 @@ volumes nomeados isolados. O trap de saída remove somente os recursos daquele
 projeto com `docker compose down --volumes --remove-orphans`; não usa volumes
 compartilhados nem executa limpeza global do Docker.
 
-## Resultado verificado
+## Evidência histórica de 25/09/2026
 
-Em 25/09/2026, o comando `make mvp-smoke` foi executado com Docker Engine
+Esta seção é uma fotografia histórica, mantida para rastreabilidade. Em
+25/09/2026, o comando `make mvp-smoke` foi executado com Docker Engine
 29.7.2 e Docker Compose 5.4.0. Resultado real: **aprovado**.
 
 - PostgreSQL `16-alpine` ficou healthy em volume exclusivo;
@@ -115,3 +123,20 @@ Em 25/09/2026, o comando `make mvp-smoke` foi executado com Docker Engine
 
 Também foram executados `ruff`, `mypy` e os 224 testes do backend: todos
 passaram, com cobertura total reportada de 95%.
+
+## Resultado verificado atual
+
+Em 20/10/2026, `make check` retornou código zero:
+
+- Ruff aprovado e mypy aprovado em 76 arquivos;
+- 231 testes backend aprovados em 69,10 s, com cobertura total de 95%;
+- ESLint e TypeScript aprovados;
+- 35 testes Vitest aprovados em 6 arquivos;
+- build Vite aprovado, com 639 módulos transformados.
+
+Na mesma data, `make mvp-smoke` foi executado duas vezes consecutivas com
+Docker Engine 29.7.2 e Compose 5.4.0. As duas execuções terminaram com
+`[passed]`, aplicaram `20261012_0013 (head)`, não encontraram divergência no
+metadata Alembic e validaram health, OpenAPI, frontend e Golden Path. Em ambas,
+PostgreSQL, backend e frontend ficaram healthy, e os recursos isolados foram
+removidos ao final.

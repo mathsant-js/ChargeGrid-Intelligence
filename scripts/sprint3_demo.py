@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime
 from decimal import Decimal
+from http.client import HTTPResponse
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -13,6 +14,8 @@ BASE = os.environ.get("DEMO_API_URL", "http://localhost:8000/api/v1").rstrip("/"
 FRONTEND = os.environ.get("DEMO_FRONTEND_URL", "http://localhost:5173").rstrip("/")
 PREFIX = "SPRINT3-DEMO"
 API_READY_TIMEOUT_SECONDS = 30
+WEB_SURFACE_RETRY_ATTEMPTS = 3
+WEB_SURFACE_RETRY_DELAY_SECONDS = 0.5
 
 
 def call(method: str, path: str, token: str | None = None, body: dict | None = None,
@@ -100,17 +103,28 @@ def tick(admin: str, station_id: str, expected_count: int,
 
 
 def validate_web_surfaces() -> None:
-    try:
-        with urlopen(BASE.removesuffix("/api/v1") + "/openapi.json", timeout=10) as response:
-            schema = json.load(response)
-        require("/api/v1/health" in schema.get("paths", {}), "OpenAPI",
-                "generated schema does not contain the health endpoint")
-        with urlopen(FRONTEND, timeout=10) as response:
-            html = response.read().decode(errors="replace")
-        require(response.status == 200 and "<div id=\"root\"></div>" in html,
-                "frontend", f"unexpected response from {FRONTEND}")
-    except (ConnectionError, TimeoutError, URLError) as exc:
-        raise RuntimeError(f"[web surfaces] failed to access OpenAPI or frontend: {exc}") from exc
+    """Validate read-only surfaces, retrying only transient connection failures."""
+
+    def open_with_retry(url: str) -> HTTPResponse:
+        last_error: OSError | None = None
+        for attempt in range(WEB_SURFACE_RETRY_ATTEMPTS):
+            try:
+                return urlopen(url, timeout=10)
+            except (ConnectionError, TimeoutError, URLError) as exc:
+                last_error = exc
+                if attempt + 1 < WEB_SURFACE_RETRY_ATTEMPTS:
+                    time.sleep(WEB_SURFACE_RETRY_DELAY_SECONDS)
+        raise RuntimeError(f"[web surfaces] failed to access {url}: {last_error}") from last_error
+
+    with open_with_retry(BASE.removesuffix("/api/v1") + "/openapi.json") as response:
+        schema = json.load(response)
+    require("/api/v1/health" in schema.get("paths", {}), "OpenAPI",
+            "generated schema does not contain the health endpoint")
+    with open_with_retry(FRONTEND) as response:
+        html = response.read().decode(errors="replace")
+        status = response.status
+    require(status == 200 and "<div id=\"root\"></div>" in html,
+            "frontend", f"unexpected response from {FRONTEND}")
 
 
 def main() -> None:

@@ -52,6 +52,18 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:5173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     ports:
       - "127.0.0.1:${MVP_SMOKE_FRONTEND_PORT:?required}:5173"
 

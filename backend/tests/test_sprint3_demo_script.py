@@ -25,6 +25,14 @@ class HealthyResponse:
         return None
 
 
+class WebResponse(HealthyResponse):
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def read(self) -> bytes:
+        return self.body
+
+
 def test_wait_for_api_retries_transient_startup_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -57,6 +65,31 @@ def test_wait_for_api_reports_backend_diagnostics(monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(RuntimeError, match=r"docker compose logs backend"):
         demo.wait_for_api(timeout_seconds=0.5)
+
+
+def test_validate_web_surfaces_retries_transient_frontend_connection_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = load_demo_script()
+    frontend_attempts = 0
+    sleeps: list[float] = []
+
+    def open_surface(url: str, **_: object) -> WebResponse:
+        nonlocal frontend_attempts
+        if url.endswith("/openapi.json"):
+            return WebResponse(b'{"paths":{"/api/v1/health":{}}}')
+        frontend_attempts += 1
+        if frontend_attempts == 1:
+            raise URLError("frontend starting")
+        return WebResponse(b'<div id="root"></div>')
+
+    monkeypatch.setattr(demo, "urlopen", open_surface)
+    monkeypatch.setattr(demo.time, "sleep", sleeps.append)
+
+    demo.validate_web_surfaces()
+
+    assert frontend_attempts == 2
+    assert sleeps == [demo.WEB_SURFACE_RETRY_DELAY_SECONDS]
 
 
 def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> None:
