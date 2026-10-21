@@ -14,6 +14,7 @@ from app.models.alert import Alert, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
+from app.models.simulation import SimulationState
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.simulation.clock import SimulationClock
@@ -367,6 +368,14 @@ def test_repeat_same_instant_is_idempotent_and_constraints_reject_duplicates(
     provider = SimulationEnergyDataProvider()
     execute_tick(db_session, clock=clock(), solar_provider=provider, power_resolver=resolver)
     db_session.rollback()
+
+    # Re-create a real delivery/retry of the already committed instant. A newly
+    # constructed clock merely being behind is instead a restart: the durable
+    # checkpoint is authoritative and must advance to its next instant.
+    checkpoint = db_session.scalar(select(SimulationState))
+    assert checkpoint is not None
+    checkpoint.current_instant = INSTANT
+    db_session.commit()
     repeat = execute_tick(
         db_session, clock=clock(), solar_provider=provider, power_resolver=resolver
     )
@@ -394,6 +403,33 @@ def test_repeat_same_instant_is_idempotent_and_constraints_reject_duplicates(
     )
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_stale_clock_resumes_from_checkpoint_and_advances_one_interval(
+    db_session: Session,
+) -> None:
+    _, session = add_session(db_session)
+    resolver = FixedResolver({session.id: PowerBreakdown(9, 4, 5)})
+    provider = SimulationEnergyDataProvider()
+
+    first = execute_tick(
+        db_session, clock=clock(), solar_provider=provider, power_resolver=resolver
+    )
+    db_session.rollback()
+    restarted_clock = clock()
+    resumed = execute_tick(
+        db_session,
+        clock=restarted_clock,
+        solar_provider=provider,
+        power_resolver=resolver,
+    )
+
+    assert first.timestamp == INSTANT
+    assert resumed.timestamp == INSTANT + restarted_clock.tick_duration
+    assert restarted_clock.current_instant == INSTANT + restarted_clock.tick_duration * 2
+    assert counts(db_session) == (2, 2)
+    db_session.refresh(session)
+    assert session.energy_consumed_kwh == pytest.approx(2 * 9 / 60)
 
 
 def test_failure_rolls_back_all_stations_and_logs(

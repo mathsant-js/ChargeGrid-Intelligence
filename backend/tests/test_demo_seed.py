@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -6,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.demo_seed import seed
+from app.ml.demo_prepare import prepare_inference_history
 from app.models.billing import Tariff
+from app.models.energy import ChargingSession, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
 from app.models.user import User
@@ -29,6 +32,34 @@ def test_demo_seed_is_idempotent(db_session: Session) -> None:
 def test_demo_seed_requires_passwords(db_session: Session) -> None:
     with pytest.raises(ValueError, match="at least 8"):
         seed(db_session, "short", "user-secret")
+
+
+def test_ml_demo_history_is_causal_deterministic_and_idempotent(db_session: Session) -> None:
+    seed(db_session, "admin-secret", "user-secret")
+    demo_start = datetime(2026, 9, 18, 11, 58, tzinfo=UTC)
+
+    first = prepare_inference_history(db_session, demo_start)
+    db_session.commit()
+    second = prepare_inference_history(db_session, demo_start)
+    db_session.commit()
+
+    assert first == second == datetime(2026, 9, 11, 12, 1, tzinfo=UTC)
+    assert first < demo_start
+    assert db_session.scalar(select(func.count()).select_from(EnergyReading)) == 4
+    assert db_session.scalar(select(func.count()).select_from(SolarReading)) == 1
+    assert db_session.scalar(select(func.count()).select_from(ChargingSession)) == 4
+    assert db_session.scalar(select(func.sum(EnergyReading.allocated_power_kw))) == 80
+
+
+def test_ml_demo_result_with_datetimes_is_json_serializable() -> None:
+    result = {
+        "training": {"trained_at": datetime(2026, 9, 18, tzinfo=UTC)},
+        "historical_observation_at": "2026-09-11T12:01:00+00:00",
+    }
+
+    rendered = json.dumps(result, default=str)
+
+    assert "2026-09-18 00:00:00+00:00" in rendered
 
 
 def test_demo_clock_is_opt_in_and_utc(monkeypatch: pytest.MonkeyPatch) -> None:

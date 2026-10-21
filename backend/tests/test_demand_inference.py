@@ -16,7 +16,11 @@ from app.models.infrastructure import Charger, ChargerStatus, ChargingStation
 from app.models.prediction import DemandPrediction, DemandRiskLevel, SystemConfiguration
 from app.models.user import User, UserRole
 from app.models.vehicle import Vehicle
-from app.services.demand_predictions import classify_risk, run_demand_prediction
+from app.services.demand_predictions import (
+    build_inference_features,
+    classify_risk,
+    run_demand_prediction,
+)
 
 
 class FixedModel:
@@ -128,6 +132,36 @@ def test_risk_classification_exact_boundaries(
     assert (
         classify_risk(demand, 100, medium_threshold=0.7, high_threshold=0.9) == expected
     )
+
+
+def test_inference_features_ignore_future_energy_and_solar_readings(
+    db_session: Session,
+) -> None:
+    station, session, instant = seed_inference_context(db_session)
+    future = instant + timedelta(minutes=5)
+    db_session.add_all(
+        [
+            EnergyReading(
+                session_id=session.id,
+                timestamp=future,
+                requested_power_kw=999,
+                allocated_power_kw=999,
+                solar_power_kw=999,
+                grid_power_kw=0,
+                interval_energy_kwh=1,
+                solar_energy_kwh=1,
+                grid_energy_kwh=0,
+            ),
+            SolarReading(station_id=station.id, timestamp=future, available_power_kw=999),
+        ]
+    )
+    db_session.commit()
+
+    features, solar_available = build_inference_features(db_session, station.id, instant)
+
+    assert features.current_demand_kw == 12
+    assert features.historical_avg_demand_kw == 10
+    assert features.solar_available_kw == solar_available == 20
 
 
 def test_inference_persists_sixty_minute_forecast_and_does_not_change_allocation(

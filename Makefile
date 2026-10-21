@@ -1,4 +1,4 @@
-.PHONY: install check backend-check frontend-check up down
+.PHONY: install check backend-check frontend-check mvp-smoke up down
 
 install:
 	python3.12 -m venv backend/.venv
@@ -17,6 +17,9 @@ frontend-check:
 	cd frontend && npm run typecheck
 	cd frontend && npm test -- --run
 	cd frontend && npm run build
+
+mvp-smoke:
+	./scripts/mvp_smoke.sh
 
 up:
 	docker compose up --build

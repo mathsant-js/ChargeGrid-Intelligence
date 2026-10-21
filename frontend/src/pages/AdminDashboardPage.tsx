@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { api, ApiError, type Alert, type Charger, type ChargingSession, type Dashboard, type DemandPrediction, type EnergyReading, type Invoice, type SolarReading, type Station, type Sustainability } from '../api/client'
+import { api, ApiError, type Alert, type Charger, type ChargingSession, type Dashboard, type DemandPrediction, type EnergyReading, type Invoice, type SimulationStatus, type SolarReading, type Station, type Sustainability } from '../api/client'
 import { useAuth } from '../auth/context'
 import { DashboardCard } from '../components/DashboardCard'
 import { AppShell } from '../layouts/AppShell'
 import { aggregateEnergyHistory } from './energyHistory'
 
 type PredictionState = 'valid' | 'expired' | 'missing' | 'insufficient' | 'model-unavailable' | 'communication-error' | 'select-station'
-type Data = { stations: Station[]; chargers: Charger[]; sessions: ChargingSession[]; invoices: Invoice[]; readings: EnergyReading[]; currentReadings: EnergyReading[]; solar: SolarReading[]; summary: Dashboard; sustainability: Sustainability; alerts: Alert[]; prediction: DemandPrediction | null; predictionState: PredictionState }
+type Data = { stations: Station[]; chargers: Charger[]; sessions: ChargingSession[]; invoices: Invoice[]; readings: EnergyReading[]; currentReadings: EnergyReading[]; solar: SolarReading[]; summary: Dashboard; sustainability: Sustainability; alerts: Alert[]; simulation: SimulationStatus; prediction: DemandPrediction | null; predictionState: PredictionState }
 const number = (value: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)
 const money = (value: string) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value))
 const time = (value: string) => new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
@@ -33,7 +33,7 @@ export function AdminDashboardPage() {
     const from = period === '24h' ? new Date(Date.now() - 86400000).toISOString() : period === '7d' ? new Date(Date.now() - 7 * 86400000).toISOString() : undefined
     const filters = { station_id: stationId || undefined, from }
     const readingsPromise = api.energyHistory(filters)
-    Promise.all([api.stations(), api.chargers(), api.sessions(), api.invoices({ status: 'CLOSED' }), readingsPromise, from ? api.energyHistory({ station_id: stationId || undefined }) : readingsPromise, api.solarHistory({ station_id: stationId || undefined }), api.dashboard(filters), api.sustainability(filters), api.alerts(stationId || undefined)]).then(async ([stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts]) => {
+    Promise.all([api.stations(), api.chargers(), api.sessions(), api.invoices({ status: 'CLOSED' }), readingsPromise, from ? api.energyHistory({ station_id: stationId || undefined }) : readingsPromise, api.solarHistory({ station_id: stationId || undefined }), api.dashboard(filters), api.sustainability(filters), api.alerts(stationId || undefined), api.simulationStatus()]).then(async ([stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation]) => {
       const predictionStation = stationId || (stations.length === 1 ? stations[0].id : '')
       let prediction: DemandPrediction | null = null
       let predictionState: PredictionState = predictionStation ? 'missing' : 'select-station'
@@ -42,11 +42,11 @@ export function AdminDashboardPage() {
           const received = await api.prediction(predictionStation)
           if (validPrediction(received, predictionStation)) {
             prediction = received
-            predictionState = Date.parse(received.prediction_for) > Date.now() ? 'valid' : 'expired'
+            predictionState = Date.parse(received.prediction_for) > Date.parse(simulation.current_instant) ? 'valid' : 'expired'
           }
         } catch (cause) { if (!(cause instanceof ApiError && cause.status === 404)) predictionState = 'communication-error' }
       }
-      if (live) setData({ stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, prediction, predictionState })
+      if (live) setData({ stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation, prediction, predictionState })
     }).catch(() => { if (live) setError('Não foi possível carregar o dashboard.') })
     return () => { live = false }
   }, [stationId, period, attempt])
@@ -69,7 +69,7 @@ export function AdminDashboardPage() {
     try {
       const prediction = await api.runPrediction(selectedStation)
       if (stationIdRef.current !== stationId) return
-      if (validPrediction(prediction, selectedStation)) setData(previous => previous && { ...previous, prediction, predictionState: Date.parse(prediction.prediction_for) > Date.now() ? 'valid' : 'expired' })
+      if (validPrediction(prediction, selectedStation)) setData(previous => previous && { ...previous, prediction, predictionState: Date.parse(prediction.prediction_for) > Date.parse(prediction.generated_at) ? 'valid' : 'expired' })
       else setData(previous => previous && { ...previous, prediction: null, predictionState: 'missing' })
     } catch (cause) {
       if (stationIdRef.current !== stationId) return

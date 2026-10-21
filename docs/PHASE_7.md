@@ -1,5 +1,9 @@
 # Fase 7 — Dataset, baseline e treinamento
 
+> **Registro histórico.** Preserva decisões, comandos e resultados da Fase 7.
+> Para preparar a demo atual, siga
+> [Validação automatizada do MVP](MVP_DELIVERY_SMOKE_TEST.md).
+
 Esta fase implementa a geração reproduzível do dataset temporal, avaliação do
 baseline, treinamento e persistência do artefato, além da inferência consultiva
 integrada à aplicação.
@@ -11,13 +15,21 @@ integrada à aplicação.
   intervalos à frente;
 - `historical_avg_demand_kw` usa apenas observações anteriores do mesmo par
   hora/dia da semana;
-- split cronológico de 80% para treino e 20% para teste, sem embaralhamento;
+- backtesting temporal com três folds walk-forward, treino expansivo e janelas
+  contíguas de 20%, sem embaralhamento;
+- cada fold aplica purge gap de 12 linhas/60 minutos para que nenhum target de
+  treino alcance sua janela de validação;
 - baseline pela média do target no treino para hora + dia da semana;
 - gerador sintético isolado do alocador de produção;
-- `RandomForestRegressor` treinado apenas na janela cronológica de treino;
+- baseline, `RandomForestRegressor`, `ExtraTreesRegressor` e
+  `HistGradientBoostingRegressor` avaliados nas mesmas três janelas cronológicas;
+- seleção automática pelo menor RMSE agregado das previsões fora da amostra,
+  incluindo o baseline como possível vencedor;
+- métricas por fold e por faixa de demanda incluem quantidade de observações;
 - features do modelo restritas às sete features mínimas da SPEC;
-- artefato Joblib contém modelo, versão, contrato ordenado de features, target,
-  períodos de treino/teste e métricas;
+- artefato Joblib contém o vencedor, versão de formato e do scikit-learn,
+  contrato ordenado de features, target, horizonte, seed, períodos e métricas
+  de todos os candidatos;
 - carregamento falha explicitamente para artefato ausente, inválido ou com
   features incompatíveis;
 - previsões são consultivas e não são conectadas ao alocador energético;
@@ -43,9 +55,22 @@ cd backend
   --artifact ../data/models/demand_forecast.joblib
 ```
 
-Os parâmetros `--days`, `--seed`, `--test-fraction`, `--dataset`, `--metadata` e `--artifact`
-podem ser configurados. Os CSVs e JSONs gerados sob `data/` são ignorados pelo
-Git; apenas `.gitkeep` é versionado.
+Os parâmetros `--days`, `--seed`, `--test-fraction`, `--dataset`, `--metadata` e
+`--artifact` podem ser configurados. `--test-fraction` define o tamanho de cada
+uma das três janelas; a configuração precisa deixar dados anteriores suficientes
+para o primeiro treino e seu gap. Os CSVs e JSONs gerados sob `data/` são
+ignorados pelo Git; apenas `.gitkeep` é versionado.
+
+Para a demonstração oficial, depois das migrations e de `app.demo_seed`, use o
+comando idempotente abaixo antes de iniciar a API. Além do pipeline acima, ele
+registra quatro leituras históricas válidas de 20 kW exatamente sete dias antes
+da previsão. Nenhuma leitura futura é criada.
+
+```bash
+cd backend
+.venv/bin/python -m app.ml.demo_prepare \
+  --demo-start 2026-09-18T11:58:00+00:00
+```
 
 ## Inferência administrativa
 
@@ -76,30 +101,17 @@ substituir as invariantes determinísticas de energia.
 
 ## Resultado reproduzido
 
-Execução realizada em 23/09/2026 com seed 42 e split 80/20:
+O relatório atualizado, com os quatro candidatos, variação entre folds, análise
+por faixa de demanda e limitações, está em [ML_EVALUATION.md](ML_EVALUATION.md).
+O ganho observado é pequeno e não altera o caráter consultivo da previsão.
 
-| Item | Random Forest | Baseline | Diferença (modelo vs baseline) |
-|---|---:|---:|---:|
-| MAE | 11,542932 kW | 11,096690 kW | +0,446242 kW |
-| RMSE | 14,714592 kW | 14,122756 kW | +0,591836 kW |
-| R² | 0,811010 | 0,825907 | -0,014897 |
-
-Foram usadas 25.920 linhas. O treino contém 20.736 linhas entre
-2026-01-01 00:00 UTC e 2026-03-13 23:55 UTC; o teste contém 5.184 linhas entre
-2026-03-14 00:00 UTC e 2026-03-31 23:55 UTC.
-
-O Random Forest inicial **não superou o baseline** nesta execução. O resultado
-é preservado como evidência experimental; o modelo não deve substituir o
-baseline nem influenciar diretamente a alocação energética com base nestas
-métricas.
-
-Validação executada:
+Validação focada executada:
 
 ```bash
 cd backend
-.venv/bin/ruff check .
-.venv/bin/mypy app
-.venv/bin/pytest -q
+.venv/bin/ruff check app/ml tests/test_ml_dataset.py tests/test_ml_training.py
+.venv/bin/mypy app/ml
+.venv/bin/pytest -q tests/test_ml_dataset.py tests/test_ml_training.py
 ```
 
-Resultados: Ruff sem erros, mypy sem erros em 73 arquivos e `200 passed`.
+Resultados atuais: Ruff sem erros, mypy sem erros em 6 arquivos e `20 passed`.

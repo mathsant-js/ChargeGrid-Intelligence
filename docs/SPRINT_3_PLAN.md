@@ -1,5 +1,10 @@
 # Sprint 3 — Plano de desenvolvimento e evidências
 
+> **Registro histórico de planejamento.** As tarefas e lacunas abaixo retratam
+> o início da Sprint 3 e foram preservadas como evidência. Não use este arquivo
+> para preparar a demo; siga o
+> [guia operacional vigente](MVP_DELIVERY_SMOKE_TEST.md).
+
 ## Objetivo e limite
 
 Entregar uma demonstração reproduzível do protótipo **simulado** do ChargeGrid

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.ml.dataset import DemandDatasetRow
+from app.ml.dataset import HORIZON_STEPS, DemandDatasetRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,21 +29,68 @@ class BaselineEvaluation:
 
 
 def chronological_split(
-    rows: Sequence[DemandDatasetRow], test_fraction: float = 0.2
+    rows: Sequence[DemandDatasetRow],
+    test_fraction: float = 0.2,
+    purge_steps: int = HORIZON_STEPS,
 ) -> tuple[Sequence[DemandDatasetRow], Sequence[DemandDatasetRow]]:
     if not 0 < test_fraction < 1:
         raise ValueError("test_fraction must be between zero and one")
-    if len(rows) < 2:
-        raise ValueError("at least two rows are required")
+    if purge_steps < 0:
+        raise ValueError("purge_steps must be nonnegative")
+    if len(rows) < purge_steps + 2:
+        raise ValueError("rows must cover train, purge gap, and test")
     if any(
         current.timestamp <= previous.timestamp
         for previous, current in zip(rows, rows[1:], strict=False)
     ):
         raise ValueError("rows must be strictly ordered by timestamp")
     split_index = int(len(rows) * (1 - test_fraction))
-    if split_index == 0 or split_index == len(rows):
+    train_end = split_index - purge_steps
+    if train_end <= 0 or split_index == len(rows):
         raise ValueError("split must leave rows in train and test")
-    return rows[:split_index], rows[split_index:]
+    # Labels are 60 minutes ahead. Removing the rows immediately before the
+    # test boundary ensures no training label observes the test period.
+    return rows[:train_end], rows[split_index:]
+
+
+def expanding_window_splits(
+    rows: Sequence[DemandDatasetRow],
+    test_fraction: float = 0.2,
+    folds: int = 3,
+    purge_steps: int = HORIZON_STEPS,
+) -> list[tuple[Sequence[DemandDatasetRow], Sequence[DemandDatasetRow]]]:
+    """Build causal walk-forward folds with expanding training windows.
+
+    Validation windows are contiguous, equally sized, and located at the end of
+    the series. A purge gap equal to the forecast horizon prevents a training
+    label from reaching its following validation window.
+    """
+    if not 0 < test_fraction < 1:
+        raise ValueError("test_fraction must be between zero and one")
+    if folds < 2:
+        raise ValueError("folds must be at least two")
+    if purge_steps < 0:
+        raise ValueError("purge_steps must be nonnegative")
+    if any(
+        current.timestamp <= previous.timestamp
+        for previous, current in zip(rows, rows[1:], strict=False)
+    ):
+        raise ValueError("rows must be strictly ordered by timestamp")
+    # Match chronological_split's boundary exactly, including floating-point
+    # rounding for small datasets.
+    validation_rows = len(rows) - int(len(rows) * (1 - test_fraction))
+    first_validation = len(rows) - folds * validation_rows
+    if validation_rows < 1 or first_validation - purge_steps < 1:
+        raise ValueError("rows must cover expanding train, purge gaps, and validation folds")
+    return [
+        (
+            rows[: validation_start - purge_steps],
+            rows[validation_start : validation_start + validation_rows],
+        )
+        for validation_start in (
+            first_validation + fold_index * validation_rows for fold_index in range(folds)
+        )
+    ]
 
 
 def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> RegressionMetrics:

@@ -1,6 +1,9 @@
-"""Single-process, manually driven simulator control."""
+"""Single-process automatic and manual simulator control."""
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from threading import RLock
 
@@ -8,8 +11,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.session import SessionLocal
 from app.models.energy import EnergyReading, SolarReading
 from app.models.prediction import SystemConfiguration
+from app.models.simulation import SimulationState
 from app.services.energy_allocation import EqualSharePowerResolver
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.energy_data import SimulationEnergyDataProvider
@@ -17,32 +22,144 @@ from app.simulation.tick import TickResult, execute_tick
 
 logger = logging.getLogger(__name__)
 
+SessionFactory = Callable[[], Session]
+WaitFunction = Callable[[float], Awaitable[None]]
+
 
 class SimulationController:
-    def __init__(self, clock: SimulationClock | None = None) -> None:
+    """Coordinate one non-overlapping simulation runner in this backend process."""
+
+    def __init__(
+        self,
+        clock: SimulationClock | None = None,
+        *,
+        session_factory: SessionFactory = SessionLocal,
+        wait: WaitFunction = asyncio.sleep,
+        runner_interval_seconds: float | None = None,
+    ) -> None:
         self.clock = clock or SimulationClock(
             initial_instant=get_settings().demo_simulation_start_utc or datetime.now(UTC)
         )
         self.last_tick: datetime | None = None
         self.lock = RLock()
+        self._session_factory = session_factory
+        self._wait = wait
+        self._runner_interval_seconds = (
+            runner_interval_seconds
+            if runner_interval_seconds is not None
+            else get_settings().simulation_runner_interval_seconds
+        )
+        self._runner_task: asyncio.Task[None] | None = None
+        self._runner_guard = asyncio.Lock()
 
-    def start(self, db: Session) -> None:
-        with self.lock:
-            if self.clock.state is SimulationClockState.RUNNING:
-                return
-            configuration = db.scalar(select(SystemConfiguration).limit(1))
-            if configuration is not None:
-                self.clock.simulation_speed = configuration.simulation_speed
-            db.rollback()
-            self.clock.start()
-            logger.info("simulation_started")
+    @property
+    def runner_active(self) -> bool:
+        task = self._runner_task
+        return task is not None and not task.done()
 
-    def stop(self) -> None:
-        with self.lock:
-            if self.clock.state is SimulationClockState.STOPPED:
-                return
-            self.clock.stop()
-            logger.info("simulation_stopped")
+    async def startup(self) -> None:
+        """Restore the last committed clock checkpoint without restarting ticks."""
+        with self.lock, self._session_factory() as db:
+            checkpoint = db.scalar(select(SimulationState).limit(1))
+            if checkpoint is not None:
+                current = checkpoint.current_instant
+                if current.tzinfo is None:
+                    current = current.replace(tzinfo=UTC)
+                self.clock = SimulationClock(
+                    initial_instant=current,
+                    simulation_speed=self.clock.simulation_speed,
+                    real_tick_interval=self.clock.real_tick_interval,
+                )
+                last_tick = checkpoint.last_tick
+                self.last_tick = (
+                    last_tick.replace(tzinfo=UTC)
+                    if last_tick is not None and last_tick.tzinfo is None
+                    else last_tick
+                )
+            else:
+                latest_energy = db.scalar(select(func.max(EnergyReading.timestamp)))
+                latest_solar = db.scalar(select(func.max(SolarReading.timestamp)))
+                latest = max(
+                    (
+                        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+                        for value in (latest_energy, latest_solar)
+                        if value is not None
+                    ),
+                    default=None,
+                )
+                if latest is not None:
+                    self.clock = SimulationClock(
+                        initial_instant=max(
+                            self.clock.initial_instant,
+                            latest + self.clock.tick_duration,
+                        ),
+                        simulation_speed=self.clock.simulation_speed,
+                        real_tick_interval=self.clock.real_tick_interval,
+                    )
+                    if self.clock.current_instant == latest + self.clock.tick_duration:
+                        self.last_tick = latest
+        logger.info("simulation_controller_started")
+
+    async def shutdown(self) -> None:
+        """Stop the clock and wait until the process-local runner has exited."""
+
+        await self.stop()
+        logger.info("simulation_controller_shutdown")
+
+    async def start(self, db: Session) -> None:
+        """Idempotently start the clock and its single automatic runner."""
+
+        async with self._runner_guard:
+            with self.lock:
+                if self.clock.state is SimulationClockState.RUNNING:
+                    return
+                configuration = db.scalar(select(SystemConfiguration).limit(1))
+                if configuration is not None:
+                    self.clock.simulation_speed = configuration.simulation_speed
+                db.rollback()
+                self.clock.start()
+                self._runner_task = asyncio.create_task(
+                    self._run(), name="chargegrid-simulation-runner"
+                )
+                logger.info("simulation_started")
+
+    async def stop(self) -> None:
+        """Idempotently stop automatic ticks and await runner termination."""
+
+        async with self._runner_guard:
+            with self.lock:
+                was_running = self.clock.state is SimulationClockState.RUNNING
+                self.clock.stop()
+                task = self._runner_task
+            if task is not None and not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            self._runner_task = None
+            if was_running:
+                logger.info("simulation_stopped")
+
+    async def _run(self) -> None:
+        """Wait between ticks and isolate failures so the next interval can recover."""
+
+        logger.info("simulation_runner_started")
+        try:
+            while self.clock.state is SimulationClockState.RUNNING:
+                await self._wait(self._runner_interval_seconds)
+                if self.clock.state is not SimulationClockState.RUNNING:
+                    break
+                try:
+                    with self._session_factory() as db:
+                        self.tick(db)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("simulation_runner_tick_failed")
+        except asyncio.CancelledError:
+            logger.info("simulation_runner_cancelled")
+            raise
+        finally:
+            logger.info("simulation_runner_stopped")
 
     def reset(self, db: Session) -> bool:
         """Reset only while stopped, preserving readings and moving past their timestamps."""
@@ -69,15 +186,22 @@ class SimulationController:
                 real_tick_interval=self.clock.real_tick_interval,
             )
             self.last_tick = None
+            checkpoint = db.scalar(select(SimulationState).limit(1))
+            if checkpoint is None:
+                db.add(SimulationState(current_instant=next_instant, last_tick=None))
+            else:
+                checkpoint.current_instant = next_instant
+                checkpoint.last_tick = None
+            db.commit()
             logger.info("simulation_reset", extra={"simulated_at": next_instant.isoformat()})
             return True
 
     def tick(self, db: Session) -> TickResult | None:
+        """Execute one manual or automatic tick without allowing overlap."""
+
         with self.lock:
             if self.clock.state is SimulationClockState.STOPPED:
                 return None
-            # Authentication performed a SELECT on this request's session.
-            # execute_tick owns its transaction and must enter with a clean session.
             db.rollback()
             try:
                 result = execute_tick(
@@ -87,6 +211,7 @@ class SimulationController:
                     power_resolver=EqualSharePowerResolver(),
                 )
             except Exception:
+                db.rollback()
                 logger.exception("simulation_control_tick_failed")
                 raise
             self.last_tick = result.timestamp

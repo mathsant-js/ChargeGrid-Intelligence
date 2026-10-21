@@ -2,10 +2,12 @@ from pathlib import Path
 
 import joblib
 import pytest
+import sklearn
 
 from app.ml.baseline import evaluate_hour_weekday_baseline
 from app.ml.dataset import DatasetConfig, DemandDatasetRow, generate_dataset
 from app.ml.training import (
+    BASELINE_NAME,
     MODEL_FEATURES,
     IncompatibleModelArtifactError,
     ModelArtifactNotFoundError,
@@ -49,14 +51,26 @@ def test_training_reports_required_metrics_and_baseline_comparison(
 ) -> None:
     baseline, result = _train(dataset, tmp_path / "model.joblib")
 
-    assert result.metadata.algorithm == "RandomForestRegressor"
+    assert "RandomForestRegressor" in result.comparison.candidates
+    assert len(result.comparison.candidates) == 4  # baseline + at most three classical models
+    assert result.metadata.sklearn_version == sklearn.__version__
     assert result.metadata.metrics.mae >= 0
     assert result.metadata.metrics.rmse >= 0
     assert result.metadata.metrics.r2 == pytest.approx(result.metadata.metrics.r2)
-    assert result.comparison.baseline == baseline.metrics
-    assert result.comparison.model == result.metadata.metrics
-    assert result.comparison.mae_improvement == pytest.approx(
-        baseline.metrics.mae - result.metadata.metrics.mae
+    assert result.metadata.metrics == result.comparison.candidates[result.comparison.winner]
+    assert all(
+        metrics.mae >= 0 and metrics.rmse >= 0 for metrics in result.comparison.candidates.values()
+    )
+    assert result.comparison.selection_metric == "rmse"
+    assert result.comparison.winner == min(
+        result.comparison.candidates,
+        key=lambda name: result.comparison.candidates[name].rmse,
+    )
+    assert result.temporal_evaluation.strategy == "expanding_window"
+    assert len(result.temporal_evaluation.folds) == 3
+    assert result.temporal_evaluation.folds[-1].candidate_metrics[BASELINE_NAME] == baseline.metrics
+    assert sum(segment.rows for segment in result.segments.by_demand_band.values()) == sum(
+        fold.validation_period.rows for fold in result.temporal_evaluation.folds
     )
 
 
@@ -73,6 +87,27 @@ def test_model_is_persisted_reloaded_and_predicts(
     assert loaded.metadata == result.metadata
     assert len(predictions) == 3
     assert all(prediction >= 0 for prediction in predictions)
+
+
+def test_training_is_deterministic(dataset: list[DemandDatasetRow], tmp_path: Path) -> None:
+    _, first = _train(dataset, tmp_path / "first.joblib")
+    _, second = _train(dataset, tmp_path / "second.joblib")
+    assert first.comparison == second.comparison
+    assert load_model_artifact(tmp_path / "first.joblib").predict(dataset[-10:]) == pytest.approx(
+        load_model_artifact(tmp_path / "second.joblib").predict(dataset[-10:])
+    )
+
+
+def test_baseline_can_win_and_is_persisted(
+    dataset: list[DemandDatasetRow], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.ml.training._candidate_models", lambda *_: {})
+    baseline, result = _train(dataset, tmp_path / "baseline.joblib")
+    loaded = load_model_artifact(tmp_path / "baseline.joblib")
+    assert result.comparison.baseline_won is True
+    assert result.comparison.winner == BASELINE_NAME
+    assert result.metadata.metrics == result.comparison.candidates[BASELINE_NAME]
+    assert len(loaded.predict(dataset[-2:])) == 2
 
 
 def test_loading_missing_artifact_fails_explicitly(tmp_path: Path) -> None:
@@ -100,4 +135,30 @@ def test_loading_rejects_tampered_feature_metadata(
     joblib.dump(bundle, artifact_path)
 
     with pytest.raises(IncompatibleModelArtifactError, match="features are incompatible"):
+        load_model_artifact(artifact_path)
+
+
+def test_loading_rejects_incompatible_sklearn_version(
+    dataset: list[DemandDatasetRow], tmp_path: Path
+) -> None:
+    artifact_path = tmp_path / "model.joblib"
+    _train(dataset, artifact_path)
+    bundle = joblib.load(artifact_path)
+    bundle["metadata"]["sklearn_version"] = "0.0.0"
+    joblib.dump(bundle, artifact_path)
+
+    with pytest.raises(IncompatibleModelArtifactError, match="scikit-learn version"):
+        load_model_artifact(artifact_path)
+
+
+def test_loading_rejects_incompatible_forecast_horizon(
+    dataset: list[DemandDatasetRow], tmp_path: Path
+) -> None:
+    artifact_path = tmp_path / "model.joblib"
+    _train(dataset, artifact_path)
+    bundle = joblib.load(artifact_path)
+    bundle["metadata"]["forecast_horizon_minutes"] = 30
+    joblib.dump(bundle, artifact_path)
+
+    with pytest.raises(IncompatibleModelArtifactError, match="prediction contract"):
         load_model_artifact(artifact_path)

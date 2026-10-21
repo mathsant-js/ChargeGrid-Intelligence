@@ -1,5 +1,9 @@
 # Fase 1 — Fundação (concluída)
 
+> **Registro histórico.** Retrata a entrega desta fase na data indicada.
+> Consulte [Arquitetura vigente](ARCHITECTURE.md) e o
+> [guia atual da demo](MVP_DELIVERY_SMOKE_TEST.md) para operar o MVP.
+
 **Status:** concluída em 21/08/2026.
 
 ## Objetivo

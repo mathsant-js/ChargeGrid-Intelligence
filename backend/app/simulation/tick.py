@@ -13,13 +13,14 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alert, AlertSeverity, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargingStation
 from app.models.prediction import SystemConfiguration
+from app.models.simulation import SimulationState
 from app.models.vehicle import Vehicle
 from app.services.energy_allocation import PowerBreakdown, SessionPowerRequest
 from app.services.energy_readings import ABSOLUTE_TOLERANCE, build_energy_reading_data
@@ -67,11 +68,42 @@ def execute_tick(
     if clock.state is not SimulationClockState.RUNNING:
         raise RuntimeError("simulation clock must be running")
     timestamp = clock.current_instant
+    tick_duration = clock.tick_duration
     processed = 0
     created = 0
     skipped = 0
     try:
         with db.begin():
+            # A singleton row is the cross-process mutex. PostgreSQL holds this
+            # row lock until the tick transaction commits or rolls back.
+            checkpoint = db.scalar(
+                select(SimulationState).order_by(SimulationState.singleton_key).limit(1).with_for_update()
+            )
+            if (
+                db.bind is not None
+                and db.bind.dialect.name == "postgresql"
+                and checkpoint is None
+            ):
+                # Serialize first-time creation too; the singleton key has a
+                # unique constraint, while this transaction lock avoids workers
+                # racing to insert it on the initial tick.
+                db.execute(text("LOCK TABLE simulation_state IN SHARE ROW EXCLUSIVE MODE"))
+                checkpoint = db.scalar(
+                    select(SimulationState)
+                    .order_by(SimulationState.singleton_key)
+                    .limit(1)
+                    .with_for_update()
+                )
+            if checkpoint is not None:
+                persisted_instant = checkpoint.current_instant
+                if persisted_instant.tzinfo is None and timestamp.tzinfo is not None:
+                    persisted_instant = persisted_instant.replace(tzinfo=timestamp.tzinfo)
+                elif persisted_instant.tzinfo is not None and timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=persisted_instant.tzinfo)
+                if persisted_instant != timestamp:
+                    timestamp = persisted_instant
+                if timestamp != clock.current_instant:
+                    clock._current_instant = timestamp
             configuration = db.scalar(select(SystemConfiguration).limit(1))
             high_demand_threshold = (
                 configuration.high_demand_threshold if configuration is not None else 0.85
@@ -152,7 +184,7 @@ def execute_tick(
                 ):
                     raise ValueError("solar power exceeds available generation")
 
-                previous_timestamp = timestamp - clock.tick_duration
+                previous_timestamp = timestamp - tick_duration
                 previous_station_tick = db.scalar(
                     select(SolarReading.id).where(
                         SolarReading.station_id == station_id,
@@ -186,8 +218,7 @@ def execute_tick(
                     )
                 if (
                     grid_total / locked_station.grid_limit_kw >= high_demand_threshold
-                    and previous_grid_power / locked_station.grid_limit_kw
-                    < high_demand_threshold
+                    and previous_grid_power / locked_station.grid_limit_kw < high_demand_threshold
                 ):
                     db.add(
                         Alert(
@@ -245,7 +276,7 @@ def execute_tick(
                         allocated_power_kw=power.allocated_power_kw,
                         solar_power_kw=power.solar_power_kw,
                         grid_power_kw=power.grid_power_kw,
-                        interval=clock.tick_duration,
+                        interval=tick_duration,
                     )
                     db.add(EnergyReading(**asdict(reading)))
                     session.allocated_power_kw = reading.allocated_power_kw
@@ -254,7 +285,18 @@ def execute_tick(
                     session.grid_energy_kwh += reading.grid_energy_kwh
                     created += 1
                 processed += 1
-        clock.advance()
+            if checkpoint is None:
+                db.add(
+                    SimulationState(
+                        current_instant=timestamp + tick_duration,
+                        last_tick=timestamp,
+                    )
+                )
+            else:
+                checkpoint.current_instant = timestamp + tick_duration
+                checkpoint.last_tick = timestamp
+        if clock.current_instant == timestamp:
+            clock.advance()
     except Exception:
         logger.exception("simulation_tick_failed", extra={"tick_timestamp": timestamp.isoformat()})
         raise

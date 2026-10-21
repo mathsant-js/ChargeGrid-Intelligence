@@ -1,32 +1,58 @@
 # ChargeGrid Intelligence
 
-Plataforma acadêmica para simular e gerenciar uma infraestrutura de recarga de veículos elétricos com controle energético, energia solar, billing, analytics e previsão de demanda.
+Plataforma acadêmica para simular e gerenciar uma infraestrutura de recarga de
+veículos elétricos com controle energético, energia solar, billing, analytics e
+previsão consultiva de demanda.
 
-O projeto usa um **monólito modular**: uma API FastAPI, uma aplicação React e PostgreSQL. A especificação técnica é a fonte de verdade da implementação.
+O projeto é um **monólito modular** com FastAPI, React e PostgreSQL. O
+[`SPEC.md`](SPEC.md) é a fonte de verdade dos requisitos; este README e a
+[`arquitetura vigente`](docs/ARCHITECTURE.md) descrevem o estado implementado.
+Os documentos `PHASE_*` e da Sprint 3 são registros históricos e não devem ser
+usados isoladamente como manual operacional.
 
-## Pré-requisitos
+## Caminho recomendado
 
-- Docker com Docker Compose (caminho recomendado); ou
-- Python 3.12, Node.js 22+ e PostgreSQL 16 para execução local.
+Para preparar e executar a demonstração completa a partir de uma instalação
+limpa, use:
 
-## Início rápido com Docker
+```bash
+make mvp-smoke
+```
+
+Esse comando cria um projeto Docker Compose isolado, aplica as migrations,
+carrega o seed, prepara o modelo de ML, inicia backend e frontend, executa o
+Golden Path pela API pública e remove os containers e volumes temporários. Ele
+não altera o volume `postgres_data` do ambiente de desenvolvimento. Requisitos,
+portas alternativas e solução de problemas estão no
+[`guia vigente da demo`](docs/MVP_DELIVERY_SMOKE_TEST.md).
+
+Use o roteiro manual da
+[`entrega da Sprint 3`](docs/sprint-3/README.md) somente quando precisar manter
+as telas abertas para apresentação ou capturar evidências. Ele é preservado
+como material histórico, mas recebeu uma indicação clara de quais instruções
+continuam válidas.
+
+## Execução de desenvolvimento
+
+Pré-requisitos: Docker com Docker Compose. Para iniciar o ambiente persistente:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Serviços:
+Serviços disponíveis:
 
-- frontend: <http://localhost:5173>
+- frontend: <http://localhost:5173>;
+- API/health: <http://localhost:8000/api/v1/health>;
+- OpenAPI: <http://localhost:8000/docs>;
+- PostgreSQL: `localhost:5432`.
 
-O frontend usa `VITE_API_URL` (padrão: `http://localhost:8000/api/v1`). Entre com uma conta existente da API. O token é mantido no armazenamento local do navegador e validado em `/auth/me` ao recarregar; “Sair” ou uma resposta 401 remove a sessão. As rotas `/admin` e `/user` exigem o perfil correspondente.
-
-Em `/admin`, o gestor pode filtrar o dashboard por estação e período, consultar indicadores, gráficos, histórico e alertas, e reconhecer alertas pela API. A previsão e o risco de pico aparecem somente para uma estação com previsão futura válida; na ausência de dados de ML, a tela mostra um estado informativo.
-Em `/user`, o usuário consulta a recarga atual, o histórico de sessões e as invoices. O custo durante a recarga é uma estimativa; o valor fechado vem da invoice. Os dados são limitados ao usuário autenticado pela API.
-- API: <http://localhost:8000/api/v1/health>
-- OpenAPI: <http://localhost:8000/docs>
-- PostgreSQL: `localhost:5432`
+O frontend usa `VITE_API_URL`, por padrão
+`http://localhost:8000/api/v1`. As rotas `/admin` e `/user` exigem contas com o
+papel correspondente. O ambiente comum não cria contas automaticamente; para
+dados demonstrativos, siga o guia da demo em vez de executar apenas
+`docker compose up`.
 
 Para aplicar migrations manualmente:
 
@@ -34,9 +60,9 @@ Para aplicar migrations manualmente:
 docker compose run --rm backend alembic upgrade head
 ```
 
-## Desenvolvimento local
+### Execução sem Docker
 
-Backend:
+Requer Python 3.12, Node.js 22+ e PostgreSQL 16.
 
 ```bash
 cd backend
@@ -47,7 +73,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Frontend:
+Em outro terminal:
 
 ```bash
 cd frontend
@@ -55,115 +81,62 @@ npm ci
 npm run dev
 ```
 
-## Qualidade
+## Validação
 
 ```bash
-make install # primeira execução
+make install  # primeira execução local
 make check
 ```
 
-O alvo executa testes, lint e verificação de tipos no backend e no frontend, além do build web. Consulte [CONTRIBUTING.md](docs/CONTRIBUTING.md) para o fluxo detalhado.
+`make check` executa lint, tipos e testes do backend, além de lint, tipos,
+testes e build do frontend. `make mvp-smoke` acrescenta a validação integrada
+em PostgreSQL 16. Não confunda resultados datados nos documentos de fase com
+uma execução atual; somente comandos executados no checkout presente confirmam
+o estado atual.
 
-## Demo da Sprint 3
+## Estado funcional atual
 
-Execute o [roteiro reproduzível da Sprint 3](docs/sprint-3/README.md) em um banco isolado. Ele inclui comandos de seed, configuração UTC, cenário por endpoints públicos e resultados esperados.
+O MVP implementa autenticação e autorização, veículos, estações, carregadores,
+sessões, simulação automática e ticks manuais, alocação Equal Share com limites
+físicos e prioridade solar, leituras energéticas, billing, dashboards,
+indicadores ESG, alertas e previsão consultiva de demanda. Todas as rotas
+públicas pertencem a `/api/v1`.
 
-### Documento da Sprint 3 em PDF
+A previsão de ML não controla a alocação de potência. A simulação, billing e
+energia solar são demonstrativos; não há integração com hardware, pagamento
+real, OCPP ou Modbus. Consulte a
+[`arquitetura vigente`](docs/ARCHITECTURE.md) para responsabilidades, fluxo e
+limites.
 
-Acesse o [documento da Sprint 3 em PDF](output/pdf/chargegrid_sprint_3.pdf).
+## Mapa da documentação
 
-### Documento da Sprint 3 em Markdown
+A classificação completa está em [`docs/README.md`](docs/README.md).
 
-Acesse o [documento da Sprint 3 em Markdown](docs/sprint-3/chargegrid_sprint_3.md).
+### Vigente
 
-### Vídeo pitch da Sprint 3 em MP4
+- [`SPEC.md`](SPEC.md): requisitos e regras de negócio, fonte de verdade;
+- [`BRIEFING.md`](BRIEFING.md): contexto do produto, subordinado ao SPEC;
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): arquitetura implementada;
+- [`docs/MVP_DELIVERY_SMOKE_TEST.md`](docs/MVP_DELIVERY_SMOKE_TEST.md): preparo,
+  execução e diagnóstico da demo atual;
+- [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md): fluxo de desenvolvimento;
+- [`docs/ML_EVALUATION.md`](docs/ML_EVALUATION.md): método e limites da avaliação
+  de ML.
 
-Acesse o [arquivo MP4 do vídeo pitch da Sprint 3](video_editado/Pitch_challenge_sprint3.mp4).
+### Histórico e evidências
 
-### Vídeo pitch da Sprint 3 no YouTube
+- [`docs/PHASE_1.md`](docs/PHASE_1.md) a
+  [`docs/PHASE_9.md`](docs/PHASE_9.md): decisões, aceites e resultados de cada
+  fase no momento em que foram registrados;
+- [`docs/SPRINT_3_PLAN.md`](docs/SPRINT_3_PLAN.md): plano anterior à entrega;
+- [`docs/sprint-3/README.md`](docs/sprint-3/README.md): material e roteiro manual
+  da Sprint 3;
+- [`docs/sprint-3/EVIDENCE.md`](docs/sprint-3/EVIDENCE.md): evidências datadas;
+- [documento da Sprint 3 em PDF](output/pdf/chargegrid_sprint_3.pdf),
+  [fonte Markdown](docs/sprint-3/chargegrid_sprint_3.md) e
+  [vídeo pitch](video_editado/Pitch_challenge_sprint3.mp4).
 
-Assista ao [vídeo pitch da Sprint 3 no YouTube](https://youtu.be/caGX1bfDN7s).
-
-Após configurar `.env` e exportar `DEMO_ADMIN_PASSWORD` e `DEMO_USER_PASSWORD` conforme o roteiro:
-
-```bash
-docker compose up --build -d
-docker compose exec -e DEMO_ADMIN_PASSWORD -e DEMO_USER_PASSWORD backend python -m app.demo_seed
-python3 scripts/sprint3_demo.py
-```
-
-## Documentação
-
-- [Briefing](BRIEFING.md)
-- [Especificação técnica](SPEC.md)
-- [Instruções para agentes](AGENTS.md)
-- [Arquitetura](docs/ARCHITECTURE.md)
-- [Fase 1 — Fundação (concluída)](docs/PHASE_1.md)
-- [Fase 2 — Domínio (concluída)](docs/PHASE_2.md)
-- [Fase 3 — Simulação e leituras (concluída)](docs/PHASE_3.md)
-- [Fase 4 — Gestão energética (concluída)](docs/PHASE_4.md)
-- [Fase 5 — Billing e histórico de invoices (concluída)](docs/PHASE_5.md)
-- [Fase 6 — Contratos da API de analytics](docs/PHASE_6_ANALYTICS.md)
-- [Fase 6 — Integração e limites](docs/PHASE_6.md)
-- [Fase 7 — ML, treinamento e inferência](docs/PHASE_7.md)
-- [Fase 8 — ESG e alertas](docs/PHASE_8.md)
-- [Fase 9 — Auditoria final do MVP](docs/PHASE_9.md)
-
-## Estado atual
-
-As Fases 1 a 9 do MVP foram implementadas e auditadas, com limitações e
-resultados de comandos registrados em [docs/PHASE_9.md](docs/PHASE_9.md).
-As migrations foram validadas em PostgreSQL 16. O backend entrega
-Users/Auth, Vehicles, Stations, Chargers e Sessions sob `/api/v1`, com JWT,
-autorização por papel e propriedade, persistência
-via Alembic e regras de início/encerramento de sessão na camada de serviço.
-
-A Fase 3 contém relógio determinístico, provedor solar e o serviço
-`app.simulation.tick.execute_tick`. O serviço recebe uma resolução de potência
-injetável por estação, valida os limites físicos e persiste as leituras e os
-acumuladores em uma transação. O controle ADMIN em `/api/v1/simulation` expõe
-status, start, stop, reset e um tick manual (`POST /ticks`), sem loop automático.
-O controle de simulação usa a política Equal Share Allocation V1 da Fase 4:
-divide a capacidade da rede mais a geração solar entre sessões `CHARGING` de
-cada estação, respeita pedido, carregador e veículo, e redistribui sobras.
-A potência solar disponível cobre primeiro a demanda alocada e é rateada
-proporcionalmente; a parcela restante vem da rede, limitada por estação.
-Cada tick corresponde à duração configurada do relógio (60 segundos simulados
-por padrão), calcula energia em kWh e atualiza os acumuladores das sessões.
-O tick também cria `HIGH_DEMAND` quando a importação da rede atinge o limiar
-configurado em `SystemConfiguration` (0,85 na ausência de configuração). O
-alerta é emitido uma vez por episódio de alta demanda e participa da mesma
-transação das leituras. Analytics e dashboards consultam as leituras persistidas.
-
-Cada estação processada recebe uma `SolarReading` única por timestamp simulado;
-cada sessão recebe uma `EnergyReading` única por timestamp. Uma reexecução no
-mesmo instante ignora estações já concluídas. Constraints no banco impedem
-duplicatas mesmo em escrita concorrente, e uma falha desfaz todo o tick. O
-relógio avança apenas depois do commit. O chamador deve passar uma sessão de
-banco sem transação ativa e um relógio iniciado; em caso de erro pode repetir
-o mesmo tick após corrigir a causa.
-
-Na Fase 5, a sessão captura a tarifa ativa válida no início. Ao encerrar, o
-backend calcula o custo Pay-per-Use, cria uma invoice `CLOSED` e registra um
-alerta na mesma transação. O histórico de invoices está disponível em
-`GET /api/v1/billing/invoices` e `GET /api/v1/billing/invoices/{invoice_id}`,
-com acesso restrito às próprias invoices para usuários comuns. Consulte
-[a validação da Fase 5](docs/PHASE_5.md) para os critérios de aceite e testes.
-Listagem e reconhecimento de alertas em `/api/v1/alerts` exigem papel ADMIN.
-
-A integração da Fase 6 cobre os dashboards administrativo e do usuário, os
-gráficos de demanda/solar/rede e faturamento, alertas e os indicadores de
-sustentabilidade. Um teste integrado percorre início de sessões, três ticks,
-redistribuição de potência, prioridade solar, alerta, encerramento, invoice e
-atualização das respostas dos dashboards. Os gráficos do gestor somam leituras
-simultâneas para mostrar a demanda total de cada tick. Veja os resultados e
-limites em [docs/PHASE_6.md](docs/PHASE_6.md).
-
-A Fase 7 disponibiliza inferência administrativa explícita em
-`POST /api/v1/predictions/demand/run`. Ela carrega o artefato configurado em
-`DEMAND_MODEL_PATH`, monta features apenas com leituras já disponíveis,
-persiste a previsão de 60 minutos, classifica o risco com os thresholds de
-`SystemConfiguration` e cria `PEAK_RISK` uma vez por episódio `HIGH`. A
-previsão é estritamente consultiva e não altera a alocação energética. Consulte
-[docs/PHASE_7.md](docs/PHASE_7.md) para preparo do modelo, pré-condições e
-respostas de erro. O simulador continua dependendo de ticks manuais pela API.
+Os registros históricos são mantidos para rastreabilidade. Quando divergirem
+do código ou da documentação vigente, prevalece a ordem definida em
+[`AGENTS.md`](AGENTS.md): `SPEC.md` > `BRIEFING.md` > `README.md` > implementação
+existente.

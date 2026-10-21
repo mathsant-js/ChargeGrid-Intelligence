@@ -55,6 +55,8 @@ def run_pipeline(
         "baseline": asdict(evaluation),
         "model": asdict(training.metadata),
         "comparison": asdict(training.comparison),
+        "segments": asdict(training.segments),
+        "temporal_evaluation": asdict(training.temporal_evaluation),
     }
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.write_text(

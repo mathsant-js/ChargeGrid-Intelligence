@@ -10,6 +10,7 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.services.errors import DomainConflictError, DomainResourceNotFoundError
+from app.simulation.control import controller as simulation_controller
 
 settings = get_settings()
 configure_logging(settings.app_log_level)
@@ -19,8 +20,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("application_startup", extra={"environment": settings.app_env})
-    yield
-    logger.info("application_shutdown")
+    await simulation_controller.startup()
+    try:
+        yield
+    finally:
+        await simulation_controller.shutdown()
+        logger.info("application_shutdown")
 
 
 app = FastAPI(

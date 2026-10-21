@@ -25,6 +25,14 @@ class HealthyResponse:
         return None
 
 
+class WebResponse(HealthyResponse):
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def read(self) -> bytes:
+        return self.body
+
+
 def test_wait_for_api_retries_transient_startup_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -59,6 +67,31 @@ def test_wait_for_api_reports_backend_diagnostics(monkeypatch: pytest.MonkeyPatc
         demo.wait_for_api(timeout_seconds=0.5)
 
 
+def test_validate_web_surfaces_retries_transient_frontend_connection_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = load_demo_script()
+    frontend_attempts = 0
+    sleeps: list[float] = []
+
+    def open_surface(url: str, **_: object) -> WebResponse:
+        nonlocal frontend_attempts
+        if url.endswith("/openapi.json"):
+            return WebResponse(b'{"paths":{"/api/v1/health":{}}}')
+        frontend_attempts += 1
+        if frontend_attempts == 1:
+            raise URLError("frontend starting")
+        return WebResponse(b'<div id="root"></div>')
+
+    monkeypatch.setattr(demo, "urlopen", open_surface)
+    monkeypatch.setattr(demo.time, "sleep", sleeps.append)
+
+    demo.validate_web_surfaces()
+
+    assert frontend_attempts == 2
+    assert sleeps == [demo.WEB_SURFACE_RETRY_DELAY_SECONDS]
+
+
 def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> None:
     demo = load_demo_script()
     calls: list[tuple[str, str, str | None]] = []
@@ -80,6 +113,8 @@ def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> N
                 "solar_power_kw": 0,
                 "grid_power_kw": 20,
                 "interval_energy_kwh": 1 / 3,
+                "solar_energy_kwh": 0,
+                "grid_energy_kwh": 1 / 3,
             }
             for _ in range(3)
         ]
@@ -87,6 +122,115 @@ def test_tick_authenticates_energy_history(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(demo, "call", fake_call)
     monkeypatch.setattr(demo, "show", lambda *_: None)
 
-    demo.tick("admin-token", "station-id", expected_count=3, expected_solar_kw=0)
+    demo.tick(
+        "admin-token",
+        "station-id",
+        expected_count=3,
+        expected_solar_kw=0,
+        expected_session_kw=20,
+    )
 
     assert ("GET", "/energy/history", "admin-token") in calls
+
+
+def test_complete_demo_runs_advisory_prediction_with_documented_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = load_demo_script()
+    monkeypatch.setenv("DEMO_ADMIN_PASSWORD", "admin-secret")
+    monkeypatch.setenv("DEMO_USER_PASSWORD", "user-secret")
+    monkeypatch.setattr(demo, "wait_for_api", lambda: None)
+    monkeypatch.setattr(demo, "login", lambda email, password: f"token:{email}")
+    monkeypatch.setattr(demo, "show", lambda *_: None)
+    monkeypatch.setattr(
+        demo,
+        "tick",
+        lambda *args, **kwargs: [{"requested_power_kw": 20} for _ in range(3)],
+    )
+    monkeypatch.setattr(demo, "validate_web_surfaces", lambda: None)
+    calls: list[tuple[str, str, dict | None]] = []
+    history = [{"timestamp": "2026-09-11T12:01:00Z", "allocated_power_kw": 20}]
+    session_number = 0
+    dashboard_calls = 0
+
+    def fake_call(
+        method: str,
+        path: str,
+        token: str | None = None,
+        body: dict | None = None,
+        params: dict | None = None,
+    ) -> object:
+        nonlocal dashboard_calls, session_number
+        calls.append((method, path, body))
+        if path == "/health":
+            return {"status": "ok"}
+        if path == "/auth/me":
+            return {"role": "ADMIN" if "admin" in str(token) else "USER"}
+        if path == "/stations":
+            return [{"id": "station", "name": demo.PREFIX, "station_peak_solar_kw": 0}]
+        if path == "/chargers":
+            return [
+                {"id": f"charger-{i}", "station_id": "station", "code": f"CH-{i}"}
+                for i in range(1, 5)
+            ]
+        if path == "/simulation/status":
+            return {"state": "STOPPED", "current_instant": "2026-09-18T11:58:00Z"}
+        if path == "/vehicles":
+            return [
+                {"id": f"vehicle-{i}", "license_plate": f"S3D-{i:04d}"}
+                for i in range(1, 5)
+            ]
+        if path == "/sessions/start":
+            session_number += 1
+            return {"id": f"session-{session_number}"}
+        if path == "/system-configuration":
+            return {"medium_peak_threshold": 0.7, "high_peak_threshold": 0.9}
+        if path == "/predictions/demand/run":
+            return {
+                "predicted_demand_kw": 73.9,
+                "capacity_kw": 80,
+                "prediction_horizon_minutes": 60,
+                "risk_level": "HIGH",
+                "recommendation": "deterministic",
+            }
+        if path == "/energy/history":
+            return history
+        if path.startswith("/chargers/"):
+            return {"status": "AVAILABLE"}
+        if path == "/billing/invoices":
+            return [{
+                "id": "invoice", "status": "CLOSED", "subtotal": "0.47",
+                "total": "0.47", "energy_kwh": "0.5833",
+            }]
+        if path == "/analytics/dashboard":
+            dashboard_calls += 1
+            return {
+                "session_count": 8,
+                "completed_session_count": 3 + dashboard_calls,
+                "energy_consumed_kwh": 1,
+                "billed_total": "0.00" if dashboard_calls == 1 else "0.47",
+            }
+        if path == "/analytics/sustainability":
+            return {"energy_consumed_kwh": 1, "solar_energy_kwh": 0.1,
+                    "avoided_co2_kg": 0.04}
+        if path == "/user/dashboard":
+            return {"current_session": None, "invoices": [{"id": "invoice"}]}
+        if path == "/alerts":
+            return [{"type": item} for item in
+                    ("HIGH_DEMAND", "HIGH_SOLAR_AVAILABILITY", "PEAK_RISK")]
+        if method == "POST" and path.endswith("/stop"):
+            return {"status": "COMPLETED", "total_cost": "0.47",
+                    "energy_consumed_kwh": 0.5833}
+        if method == "PATCH" and path == "/stations/station":
+            return {"station_peak_solar_kw": 20}
+        return []
+
+    monkeypatch.setattr(demo, "call", fake_call)
+
+    demo.main()
+
+    assert ("POST", "/predictions/demand/run", {"station_id": "station"}) in calls
+    assert not any(
+        method == "PATCH" and path == "/system-configuration"
+        for method, path, _ in calls
+    )

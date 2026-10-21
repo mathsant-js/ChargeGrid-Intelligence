@@ -1,5 +1,9 @@
 # Fase 2 — Domínio
 
+> **Registro histórico.** Retrata a entrega desta fase; limitações descritas
+> abaixo podem ter sido resolvidas nas fases seguintes. Consulte o
+> [mapa da documentação](README.md) para o estado vigente.
+
 ## Estado
 
 **Concluída em 31/08/2026.**

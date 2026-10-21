@@ -242,3 +242,6 @@ tmp/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Toml
+config.toml

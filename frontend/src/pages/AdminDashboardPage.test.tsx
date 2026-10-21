@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
 import { tokenStore, type DemandPrediction } from '../api/client'
+import './AdminDashboardPage'
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const admin = { id: 'u1', name: 'Ana', email: 'ana@example.com', role: 'ADMIN', is_active: true, created_at: '', updated_at: '' }
@@ -12,6 +13,7 @@ const reading = { id: 'r1', session_id: 'se1', timestamp: '2026-09-17T12:00:00Z'
 const alert = { id: 'a1', station_id: 's1', title: 'Demanda elevada', message: 'Verifique a rede', severity: 'WARNING', type: 'HIGH_DEMAND', created_at: '2026-09-17T12:00:00Z', acknowledged_at: null }
 const summary = { session_count: 1, completed_session_count: 0, energy_consumed_kwh: 5, billed_total: '0.00' }
 const sustainability = { station_id: null, user_id: null, energy_consumed_kwh: 5, solar_energy_kwh: 2, grid_energy_kwh: 3, solar_percentage: 40, avoided_co2_kg: 0.8, grid_emission_factor_kg_per_kwh: 0.4, estimated_solar_savings: '1.84', currency: 'BRL' }
+const simulation = { state: 'STOPPED', current_instant: '2026-09-18T11:58:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null }
 const prediction: DemandPrediction = { id: 'p1', station_id: 's1', generated_at: new Date().toISOString(), prediction_for: new Date(Date.now() + 3600000).toISOString(), predicted_demand_kw: 54, capacity_kw: 60, risk_level: 'HIGH', prediction_horizon_minutes: 60, model_version: 'rf-2026.09', recommendation: 'Monitore novas sessões.' }
 
 type MockOptions = { prediction?: DemandPrediction | null; predictionFailure?: number | 'network'; runResult?: DemandPrediction; runFailure?: number | 'network'; stationList?: typeof stations }
@@ -29,6 +31,7 @@ function mockApi(options: MockOptions = {}) {
     if (url.pathname.endsWith('/analytics/dashboard')) return json(summary)
     if (url.pathname.endsWith('/analytics/sustainability')) return json(sustainability)
     if (url.pathname.endsWith('/alerts')) return json([alert])
+    if (url.pathname.endsWith('/simulation/status')) return json(simulation)
     if (url.pathname.endsWith('/predictions/demand/run') && init?.method === 'POST') {
       if (options.runFailure === 'network') throw new TypeError('offline')
       if (options.runFailure) return json({ detail: 'prediction failure' }, options.runFailure)
@@ -68,9 +71,18 @@ describe('admin dashboard prediction', () => {
   })
 
   it('identifies an expired prediction without presenting its values as current', async () => {
-    mockApi({ prediction: { ...prediction, prediction_for: new Date(Date.now() - 60000).toISOString() } }); show()
+    mockApi({ prediction: { ...prediction, prediction_for: '2026-09-18T11:57:00Z' } }); show()
     expect(await screen.findByText(/A previsão desta estação expirou/)).toBeInTheDocument()
     expect(screen.queryByText('54 kW')).not.toBeInTheDocument()
+  })
+
+  it('shows a newly generated demo prediction using the simulated clock', async () => {
+    const demoPrediction = { ...prediction, generated_at: '2026-09-18T11:58:00Z', prediction_for: '2026-09-18T12:58:00Z' }
+    mockApi({ runResult: demoPrediction }); show()
+    await screen.findByText('Ainda não há previsão para esta estação.')
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar nova previsão' }))
+    expect(await screen.findByText('54 kW')).toBeInTheDocument()
+    expect(screen.getByText('Monitore novas sessões.')).toBeInTheDocument()
   })
 
   it.each([[422, 'Dados insuficientes para gerar uma previsão desta estação.'], [503, 'Modelo de previsão indisponível no momento.'], [500, 'Não foi possível comunicar com o serviço de previsão.']] as const)('reports run failure %s with its specific state', async (status, message) => {
