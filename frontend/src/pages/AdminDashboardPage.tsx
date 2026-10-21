@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, ApiError, type Alert, type Charger, type ChargingSession, type Dashboard, type DemandPrediction, type EnergyReading, type Invoice, type SimulationStatus, type SolarReading, type Station, type Sustainability } from '../api/client'
 import { useAuth } from '../auth/context'
@@ -14,26 +14,34 @@ const time = (value: string) => new Date(value).toLocaleString('pt-BR', { dateSt
 const active = (session: ChargingSession) => session.status === 'CHARGING' || session.status === 'PAUSED'
 const validPrediction = (prediction: DemandPrediction, stationId: string) => prediction.station_id === stationId && Number.isFinite(prediction.predicted_demand_kw) && prediction.predicted_demand_kw >= 0 && Number.isFinite(prediction.capacity_kw) && prediction.capacity_kw > 0 && ['LOW', 'MEDIUM', 'HIGH'].includes(prediction.risk_level)
 const risk = { LOW: { label: 'Baixo', symbol: '●' }, MEDIUM: { label: 'Médio', symbol: '▲' }, HIGH: { label: 'Alto', symbol: '!' } } as const
+const DASHBOARD_POLL_INTERVAL_MS = 1000
 
 export function AdminDashboardPage() {
   const { state, logout } = useAuth()
   const [stationId, setStationId] = useState('')
   const [period, setPeriod] = useState('all')
-  const [attempt, setAttempt] = useState(0)
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
   const [pendingAlert, setPendingAlert] = useState<string | null>(null)
   const [runningPrediction, setRunningPrediction] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const stationIdRef = useRef(stationId)
+  const mountedRef = useRef(true)
+  const refreshInFlightRef = useRef(false)
+  const requestIdRef = useRef(0)
+  const dataRef = useRef(data)
   stationIdRef.current = stationId
+  dataRef.current = data
 
-  useEffect(() => {
-    let live = true
+  const loadDashboard = useCallback(async () => {
+    const requestId = ++requestIdRef.current
     const from = period === '24h' ? new Date(Date.now() - 86400000).toISOString() : period === '7d' ? new Date(Date.now() - 7 * 86400000).toISOString() : undefined
     const filters = { station_id: stationId || undefined, from }
     const readingsPromise = api.energyHistory(filters)
-    Promise.all([api.stations(), api.chargers(), api.sessions(), api.invoices({ status: 'CLOSED' }), readingsPromise, from ? api.energyHistory({ station_id: stationId || undefined }) : readingsPromise, api.solarHistory({ station_id: stationId || undefined }), api.dashboard(filters), api.sustainability(filters), api.alerts(stationId || undefined), api.simulationStatus()]).then(async ([stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation]) => {
+    try {
+      const [stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation] = await Promise.all([api.stations(), api.chargers(), api.sessions(), api.invoices({ status: 'CLOSED' }), readingsPromise, from ? api.energyHistory({ station_id: stationId || undefined }) : readingsPromise, api.solarHistory({ station_id: stationId || undefined }), api.dashboard(filters), api.sustainability(filters), api.alerts(stationId || undefined), api.simulationStatus()])
       const predictionStation = stationId || (stations.length === 1 ? stations[0].id : '')
       let prediction: DemandPrediction | null = null
       let predictionState: PredictionState = predictionStation ? 'missing' : 'select-station'
@@ -46,10 +54,43 @@ export function AdminDashboardPage() {
           }
         } catch (cause) { if (!(cause instanceof ApiError && cause.status === 404)) predictionState = 'communication-error' }
       }
-      if (live) setData({ stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation, prediction, predictionState })
-    }).catch(() => { if (live) setError('Não foi possível carregar o dashboard.') })
-    return () => { live = false }
-  }, [stationId, period, attempt])
+      if (mountedRef.current && requestId === requestIdRef.current) {
+        setData({ stations, chargers, sessions, invoices, readings, currentReadings, solar, summary, sustainability, alerts, simulation, prediction, predictionState })
+        setError('')
+        setLastUpdatedAt(new Date())
+      }
+    } catch {
+      if (mountedRef.current && requestId === requestIdRef.current) setError(dataRef.current ? 'Não foi possível atualizar o dashboard. Uma nova tentativa será feita automaticamente.' : 'Não foi possível carregar o dashboard.')
+    }
+  }, [stationId, period])
+
+  const refreshDashboard = useCallback(async () => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
+    setRefreshing(true)
+    try { await loadDashboard() }
+    finally {
+      refreshInFlightRef.current = false
+      if (mountedRef.current) setRefreshing(false)
+    }
+  }, [loadDashboard])
+
+  useEffect(() => {
+    setData(null)
+    setError('')
+    void loadDashboard()
+  }, [loadDashboard])
+
+  useEffect(() => () => {
+    mountedRef.current = false
+    requestIdRef.current += 1
+  }, [])
+
+  useEffect(() => {
+    if (data?.simulation.state !== 'RUNNING') return
+    const interval = window.setInterval(() => { void refreshDashboard() }, DASHBOARD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(interval)
+  }, [data?.simulation.state, refreshDashboard])
 
   async function acknowledge(id: string) {
     setPendingAlert(id)
@@ -108,8 +149,10 @@ export function AdminDashboardPage() {
 
   return <AppShell><div className="dashboard">
     <header className="dashboard-heading"><div><p className="eyebrow">Administração</p><h1>Dashboard do gestor</h1><p>Olá, {state.status === 'authenticated' ? state.user.name : ''}</p></div><button onClick={logout}>Sair</button></header>
-    <div className="dashboard-filters"><label>Estação <select value={stationId} onChange={event => { setData(null); setError(''); setStationId(event.target.value) }}><option value="">Todas as estações</option>{data?.stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label><label>Período <select value={period} onChange={event => { setData(null); setError(''); setPeriod(event.target.value) }}><option value="all">Todo o histórico</option><option value="24h">Últimas 24 horas</option><option value="7d">Últimos 7 dias</option></select></label><button onClick={() => { setData(null); setError(''); setAttempt(value => value + 1) }}>Atualizar</button></div>
-    {error ? <div role="alert" className="dashboard-error"><p>{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Tentar novamente</button></div> : !data ? <p role="status">Carregando dashboard...</p> : <>
+    <div className="dashboard-filters"><label>Estação <select value={stationId} onChange={event => { setStationId(event.target.value) }}><option value="">Todas as estações</option>{data?.stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label><label>Período <select value={period} onChange={event => { setPeriod(event.target.value) }}><option value="all">Todo o histórico</option><option value="24h">Últimas 24 horas</option><option value="7d">Últimos 7 dias</option></select></label><button disabled={refreshing} onClick={() => { void refreshDashboard() }}>{refreshing ? 'Atualizando...' : 'Atualizar agora'}</button></div>
+    {data && <section className="simulation-status" aria-label="Estado da simulação"><div><span>Estado</span><strong>{data.simulation.state === 'RUNNING' ? 'Em execução' : 'Parada'}</strong></div><div><span>Instante simulado</span><strong>{time(data.simulation.current_instant)}</strong></div><div><span>Último tick</span><strong>{data.simulation.last_tick ? time(data.simulation.last_tick) : 'Ainda não executado'}</strong></div><div><span>Velocidade</span><strong>{number(data.simulation.simulation_speed)}×</strong></div><div><span>Fonte dos dados</span><strong>Curva solar sintética</strong></div><div><span>Última atualização</span><strong>{lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('pt-BR') : '—'}</strong></div></section>}
+    {error && <div role="alert" className="dashboard-error"><p>{error}</p>{!data && <button onClick={() => { void refreshDashboard() }}>Tentar novamente</button>}</div>}
+    {!data ? <p role="status">Carregando dashboard...</p> : <>
       <section className="kpi-grid" aria-label="Indicadores"><DashboardCard label="Demanda atual" value={`${number(demand)} kW`} /><DashboardCard label="Limite da rede" value={`${number(limit)} kW`} /><DashboardCard label="Capacidade disponível" value={`${number(Math.max(0, limit - grid))} kW`} /><DashboardCard label="Solar disponível" value={`${number(solarAvailable)} kW`} /><DashboardCard label="Solar em uso" value={`${number(solarUse)} kW`} /><DashboardCard label="Rede em uso" value={`${number(grid)} kW`} /><DashboardCard label="Carregadores ativos" value={new Set(currentSessions.map(session => session.charger_id)).size} /><DashboardCard label="Sessões ativas" value={currentSessions.length} /><DashboardCard label="Faturamento" value={money(data.summary.billed_total)} /><DashboardCard label="Energia consumida" value={`${number(data.summary.energy_consumed_kwh)} kWh`} /><DashboardCard label="Energia renovável" value={`${number(data.sustainability.solar_energy_kwh)} kWh`} /><DashboardCard label="CO₂ evitado" value={`${number(data.sustainability.avoided_co2_kg)} kg`} /></section>
       <section className="prediction-panel" aria-labelledby="prediction-title">
         <div className="prediction-panel__heading"><div><p className="eyebrow">Previsão consultiva</p><h2 id="prediction-title">Demanda prevista</h2></div>{predictionStation && <button disabled={runningPrediction} onClick={runPrediction}>{runningPrediction ? 'Gerando...' : 'Gerar nova previsão'}</button>}</div>

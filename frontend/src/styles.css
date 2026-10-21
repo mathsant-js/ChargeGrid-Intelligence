@@ -147,6 +147,10 @@ a { color: inherit; text-decoration: none; }
 .admin-list article span { color: #a9c7ba; font-size: .88rem; }
 .admin-list .admin-form { flex-basis: 100%; }
 .simulation-control { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #275343; }
+.simulation-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; padding: 1rem; border: 1px solid #275343; border-radius: 1rem; background: #0c271e; }
+.simulation-status div { display: grid; gap: .25rem; }
+.simulation-status span { color: #a9c7ba; font-size: .8rem; }
+.simulation-status strong { color: #e8f5ef; }
 .session-form { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; }
 .row-actions { justify-content: flex-start; }
 .dashboard .secondary-button { background: transparent; color: #e8f5ef; }
@@ -157,4 +161,4 @@ a { color: inherit; text-decoration: none; }
 .stop-panel { border-color: #78443f; }
 @media (max-width: 900px) { .kpi-grid, .prediction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .session-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 650px) { .dashboard { padding: 1rem; } .chart-grid, .kpi-grid, .prediction-grid, .form-grid, .session-form { grid-template-columns: 1fr; } .prediction-recommendation { grid-column: auto; } .vehicle-list li { align-items: flex-start; } }
+@media (max-width: 650px) { .dashboard { padding: 1rem; } .chart-grid, .kpi-grid, .prediction-grid, .form-grid, .session-form, .simulation-status { grid-template-columns: 1fr; } .prediction-recommendation { grid-column: auto; } .vehicle-list li { align-items: flex-start; } }

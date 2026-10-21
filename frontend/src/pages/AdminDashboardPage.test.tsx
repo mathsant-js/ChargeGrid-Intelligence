@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
-import { tokenStore, type DemandPrediction } from '../api/client'
+import { tokenStore, type DemandPrediction, type SimulationStatus } from '../api/client'
 import './AdminDashboardPage'
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -13,10 +13,10 @@ const reading = { id: 'r1', session_id: 'se1', timestamp: '2026-09-17T12:00:00Z'
 const alert = { id: 'a1', station_id: 's1', title: 'Demanda elevada', message: 'Verifique a rede', severity: 'WARNING', type: 'HIGH_DEMAND', created_at: '2026-09-17T12:00:00Z', acknowledged_at: null }
 const summary = { session_count: 1, completed_session_count: 0, energy_consumed_kwh: 5, billed_total: '0.00' }
 const sustainability = { station_id: null, user_id: null, energy_consumed_kwh: 5, solar_energy_kwh: 2, grid_energy_kwh: 3, solar_percentage: 40, avoided_co2_kg: 0.8, grid_emission_factor_kg_per_kwh: 0.4, estimated_solar_savings: '1.84', currency: 'BRL' }
-const simulation = { state: 'STOPPED', current_instant: '2026-09-18T11:58:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null }
+const simulation: SimulationStatus = { state: 'STOPPED', current_instant: '2026-09-18T11:58:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null }
 const prediction: DemandPrediction = { id: 'p1', station_id: 's1', generated_at: new Date().toISOString(), prediction_for: new Date(Date.now() + 3600000).toISOString(), predicted_demand_kw: 54, capacity_kw: 60, risk_level: 'HIGH', prediction_horizon_minutes: 60, model_version: 'rf-2026.09', recommendation: 'Monitore novas sessões.' }
 
-type MockOptions = { prediction?: DemandPrediction | null; predictionFailure?: number | 'network'; runResult?: DemandPrediction; runFailure?: number | 'network'; stationList?: typeof stations }
+type MockOptions = { prediction?: DemandPrediction | null; predictionFailure?: number | 'network'; runResult?: DemandPrediction; runFailure?: number | 'network'; stationList?: typeof stations; simulationStatus?: () => SimulationStatus; energyReading?: () => typeof reading }
 
 function mockApi(options: MockOptions = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -26,12 +26,12 @@ function mockApi(options: MockOptions = {}) {
     if (url.pathname.endsWith('/chargers')) return json([{ id: 'c1', station_id: 's1', name: 'C1', status: 'CHARGING', is_active: true }])
     if (url.pathname.endsWith('/sessions')) return json([session])
     if (url.pathname.endsWith('/billing/invoices')) return json([])
-    if (url.pathname.endsWith('/energy/history')) return json([reading])
+    if (url.pathname.endsWith('/energy/history')) return json([options.energyReading?.() ?? reading])
     if (url.pathname.endsWith('/solar/history')) return json([{ id: 'sol1', station_id: 's1', timestamp: '2026-09-17T12:00:00Z', available_power_kw: 14 }])
     if (url.pathname.endsWith('/analytics/dashboard')) return json(summary)
     if (url.pathname.endsWith('/analytics/sustainability')) return json(sustainability)
     if (url.pathname.endsWith('/alerts')) return json([alert])
-    if (url.pathname.endsWith('/simulation/status')) return json(simulation)
+    if (url.pathname.endsWith('/simulation/status')) return json(options.simulationStatus?.() ?? simulation)
     if (url.pathname.endsWith('/predictions/demand/run') && init?.method === 'POST') {
       if (options.runFailure === 'network') throw new TypeError('offline')
       if (options.runFailure) return json({ detail: 'prediction failure' }, options.runFailure)
@@ -49,7 +49,7 @@ function mockApi(options: MockOptions = {}) {
 
 function show() { tokenStore.set('token'); render(<MemoryRouter initialEntries={['/admin']}><App /></MemoryRouter>) }
 beforeEach(() => localStorage.clear())
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('admin dashboard prediction', () => {
   it('preserves the informative state when there is no prediction yet', async () => {
@@ -115,6 +115,59 @@ describe('admin dashboard prediction', () => {
 })
 
 describe('admin dashboard operations', () => {
+  it('shows the simulated clock, runner state, speed, last tick and data source', async () => {
+    mockApi({ simulationStatus: () => ({ ...simulation, state: 'RUNNING', last_tick: '2026-09-18T11:57:00Z' }) }); show()
+    const status = await screen.findByRole('region', { name: 'Estado da simulação' })
+    expect(status).toHaveTextContent('Em execução')
+    expect(status).toHaveTextContent('18/09/2026')
+    expect(status).toHaveTextContent('60×')
+    expect(status).toHaveTextContent('Curva solar sintética')
+  })
+
+  it('polls only while running and stops polling when the backend reports stopped', async () => {
+    vi.useFakeTimers()
+    let statusCalls = 0
+    const fetch = mockApi({ simulationStatus: () => ({ ...simulation, state: statusCalls++ === 0 ? 'RUNNING' : 'STOPPED' }) })
+    show()
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(screen.getByRole('region', { name: 'Estado da simulação' })).toHaveTextContent('Em execução')
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(screen.getByRole('region', { name: 'Estado da simulação' })).toHaveTextContent('Parada')
+    const callsAfterStop = fetch.mock.calls.filter(([url]) => String(url).endsWith('/simulation/status')).length
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/simulation/status'))).toHaveLength(callsAfterStop)
+  })
+
+  it('cancels dashboard polling when the page is unmounted', async () => {
+    vi.useFakeTimers()
+    const fetch = mockApi({ simulationStatus: () => ({ ...simulation, state: 'RUNNING' }) })
+    show()
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    const callsBeforeUnmount = fetch.mock.calls.length
+    cleanup()
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+    expect(fetch.mock.calls).toHaveLength(callsBeforeUnmount)
+  })
+
+  it('updates live KPI data on the next completed poll', async () => {
+    vi.useFakeTimers()
+    let reads = 0
+    mockApi({ simulationStatus: () => ({ ...simulation, state: 'RUNNING' }), energyReading: () => ({ ...reading, grid_power_kw: reads++ === 0 ? 12 : 17 }) })
+    show()
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(screen.getByText('Rede em uso').parentElement).toHaveTextContent('12 kW')
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(screen.getByText('Rede em uso').parentElement).toHaveTextContent('17 kW')
+  })
+
+  it('refreshes immediately on demand without reloading the page', async () => {
+    const fetch = mockApi(); show()
+    await screen.findByRole('region', { name: 'Estado da simulação' })
+    const callsBeforeRefresh = fetch.mock.calls.filter(([url]) => String(url).endsWith('/simulation/status')).length
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar agora' }))
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/simulation/status'))).toHaveLength(callsBeforeRefresh + 1))
+  })
+
   it('shows the complete filtered ESG report and identifies theoretical savings', async () => {
     mockApi({ prediction }); show()
     expect(await screen.findByRole('heading', { name: 'Relatório de sustentabilidade' })).toBeInTheDocument()
