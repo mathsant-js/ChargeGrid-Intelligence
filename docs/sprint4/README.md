@@ -21,7 +21,7 @@ e Matheus Jorge Santana.
 | 3 — Telemetria reproduzida | Concluída em 20/10/2026 | [`telemetry-contract.md`](telemetry-contract.md) e `data/raw/sprint4_telemetry.csv` |
 | 4 — Golden Path automático | Concluída em 20/10/2026 | `scripts/sprint4_demo.py` |
 | 5 — Documentação e diagramas | Concluída em 20/10/2026 | este guia, diagramas, resultados, roteiro e capturas |
-| 6 — Validação final | Pendente | execução final de `make check`, `make mvp-smoke` e ensaio manual |
+| 6 — Validação final | Concluída em 20/10/2026 | [`EVIDENCE.md`](EVIDENCE.md), `make check` e `make mvp-smoke` |
 
 O plano completo está em
 [`plano_desenvolvimento_sprint4.md`](plano_desenvolvimento_sprint4.md).
@@ -175,9 +175,11 @@ make mvp-smoke
 ```
 
 `make check` executa lint, tipos, testes backend/frontend e build. O smoke
-valida migrations e o fluxo integrado em PostgreSQL limpo. A etapa 6 ainda
-deverá repetir ambos e ensaiar visualmente login, start/stop, quarta sessão,
-solar, previsão, alertas, invoice e ESG.
+valida migrations e o fluxo integrado em PostgreSQL limpo. A validação final
+de 20/10/2026 aprovou ambos. O ensaio reproduzível pela API pública confirmou
+login administrativo, start/stop, atualização por ticks automáticos, entrada
+da quarta sessão, uso solar, previsão, alertas, encerramento, invoice e ESG;
+os testes do dashboard validaram o polling e a atualização imediata da tela.
 
 ## Evidências visuais
 

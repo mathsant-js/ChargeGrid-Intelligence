@@ -152,3 +152,32 @@ remontagem do `React.StrictMode`. O build de produção capturado carregou os
 KPIs, previsão, ESG, gráficos, histórico e alertas corretamente. Nenhum código
 de negócio ou schema foi alterado nesta etapa.
 
+## Etapa 6 — Validação final
+
+Executada em **20/10/2026** sobre uma árvore de trabalho inicialmente limpa.
+
+`make check` terminou com código zero e confirmou:
+
+- Ruff aprovado;
+- mypy aprovado em 76 arquivos-fonte;
+- 249 testes backend aprovados em 74,66 s, com 95% de cobertura;
+- ESLint e TypeScript aprovados;
+- 40 testes frontend aprovados em 6 arquivos;
+- build Vite aprovado, com 639 módulos transformados.
+
+O primeiro `make mvp-smoke` não teve permissão para acessar o socket do Docker
+no ambiente restrito. A repetição autorizada do mesmo alvo terminou com
+`[passed]`. Em PostgreSQL 16 limpo, ela aplicou migrations até
+`20261012_0013 (head)`, confirmou que o metadata Alembic não exige novas
+operações, preparou seed e modelo, iniciou os três serviços como `healthy` e
+removeu ao final os containers, volumes e rede exclusivos do ensaio.
+
+O Golden Path pela API pública cobriu os itens funcionais da etapa: login
+administrativo, início e parada do simulador, ticks automáticos, entrada da
+quarta sessão, Equal Share, prioridade solar, previsão, alertas, encerramento,
+invoice e ESG. Os resultados reproduziram a etapa 4: 80 kW solicitados, 60 kW
+da rede, 20 kW solares, zero violações, risco `HIGH`, invoice de R$ 0,94,
+19,1375% de participação solar e 0,9467 kg de CO₂ evitado. Os testes frontend
+com timers falsos confirmaram a atualização automática e sua interrupção
+quando a simulação para.
+
