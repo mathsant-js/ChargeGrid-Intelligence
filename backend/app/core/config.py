@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     demand_model_path: Path = Path("../data/models/demand_forecast.joblib")
     demo_simulation_start_utc: datetime | None = None
     simulation_runner_interval_seconds: float = Field(default=1, gt=0)
+    energy_data_provider: Literal["curve", "telemetry_replay"] = "curve"
+    telemetry_replay_path: Path = Path("../data/raw/sprint4_telemetry.csv")
     database_url: str = "postgresql+psycopg://chargegrid:chargegrid@localhost:5432/chargegrid"
     jwt_secret_key: str = Field(default=DEFAULT_JWT_SECRET, min_length=32)
     jwt_expiration_minutes: int = Field(default=60, gt=0)

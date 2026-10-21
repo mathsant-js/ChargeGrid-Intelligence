@@ -28,6 +28,8 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       DEMAND_MODEL_PATH: ${DEMAND_MODEL_PATH:-../data/models/demand_forecast.joblib}
       DEMO_SIMULATION_START_UTC: ${DEMO_SIMULATION_START_UTC:-}
+      ENERGY_DATA_PROVIDER: ${ENERGY_DATA_PROVIDER:-curve}
+      TELEMETRY_REPLAY_PATH: ${TELEMETRY_REPLAY_PATH:-../data/raw/sprint4_telemetry.csv}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=2)"]

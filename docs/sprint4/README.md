@@ -10,7 +10,7 @@ contrário.
 | --- | --- | --- |
 | 1 — Baseline e rastreabilidade | Concluída em 20/10/2026 | [`EVIDENCE.md`](EVIDENCE.md) e [`traceability-matrix.md`](traceability-matrix.md) |
 | 2 — Dashboard vivo | Pendente | — |
-| 3 — Telemetria reproduzida | Pendente | — |
+| 3 — Telemetria reproduzida | Concluída em 20/10/2026 | [`telemetry-contract.md`](telemetry-contract.md) e `data/raw/sprint4_telemetry.csv` |
 | 4 — Golden Path automático | Pendente | — |
 | 5 — Documentação e diagramas | Pendente | — |
 | 6 — Validação final | Pendente | — |
