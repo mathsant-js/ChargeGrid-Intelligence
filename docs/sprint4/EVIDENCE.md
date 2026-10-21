@@ -93,3 +93,36 @@ Essas lacunas estão registradas na
 [`matriz de rastreabilidade`](traceability-matrix.md) e não são tratadas como
 funcionalidades concluídas.
 
+## Etapa 4 — Golden Path automático
+
+Executada em **20/10/2026** por `make mvp-smoke`, em PostgreSQL 16 limpo. O
+smoke selecionou `telemetry_replay`, iniciou o runner uma única vez e observou
+os ticks pela API pública de histórico. O roteiro não chamou
+`/simulation/ticks` nem acessou o banco diretamente.
+
+| Marco | Resultado observado |
+| --- | --- |
+| Três sessões | 60 kW solicitados e atendidos pela rede |
+| Quarta sessão, sem solar | 80 kW solicitados; Equal Share em 60 kW; rede em 60 kW |
+| Replay às 12:02 UTC | 80 kW atendidos; 20 kW solar + 60 kW rede |
+| Invariantes | 0 violações |
+| Energia agregada | 12,3667 kWh |
+| Participação solar agregada | 19,1375% |
+| CO₂ evitado | 0,9467 kg |
+| Economia solar teórica | R$ 1,89 |
+| Sessão encerrada | 1,175 kWh; invoice fechada em R$ 0,94 |
+| Previsão | 76,8243 kW; risco `HIGH`; recomendação determinística exibida |
+| Alertas | `HIGH_DEMAND`, `HIGH_SOLAR_AVAILABILITY` e `PEAK_RISK` |
+
+O preparo executado no mesmo smoke manteve o corte temporal e registrou MAE,
+RMSE e R² do baseline e dos candidatos. O vencedor observado continuou sendo
+`HistGradientBoostingRegressor`, com MAE 10,9178, RMSE 13,8498 e R² 0,8330;
+o baseline do fold final obteve MAE 11,0964, RMSE 14,1227 e R² 0,8259.
+
+Após a implementação, `make check` também terminou com código zero: Ruff e
+mypy aprovados, **249 testes backend** e **40 testes frontend** aprovados,
+ESLint e TypeScript aprovados e build Vite concluído. A primeira tentativa do
+smoke ficou sem acesso ao socket do Docker no ambiente restrito; a repetição
+autorizada acessou o daemon e terminou com `[passed]`, removendo containers,
+rede e volumes isolados ao final.
+

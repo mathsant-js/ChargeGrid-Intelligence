@@ -58,7 +58,8 @@ run_stage "Execute deterministic seed" compose run --rm backend python -m app.de
 run_stage "Prepare ML artifact and causal history" compose run --rm backend \
   python -m app.ml.demo_prepare --demo-start 2026-09-18T11:58:00+00:00
 run_stage "Start real backend and frontend" compose up --detach --wait backend frontend
-run_stage "Execute public-API Golden Path" python3 "$ROOT_DIR/scripts/sprint3_demo.py"
+run_stage "Execute automatic Sprint 4 public-API Golden Path" \
+  python3 "$ROOT_DIR/scripts/sprint4_demo.py"
 run_stage "Confirm service health" compose ps --status running
 
 echo "[passed] ChargeGrid Intelligence MVP smoke test completed successfully."
