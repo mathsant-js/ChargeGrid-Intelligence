@@ -40,9 +40,13 @@ for reapresentado, as leituras únicas por `(station_id, timestamp)` e
 `(session_id, timestamp)` impedem nova energia; checkpoint, leituras e
 acumuladores são confirmados ou revertidos na mesma transação.
 
-`SimulationEnergyDataProvider` calcula geração solar simulada por uma curva
-UTC. `EqualSharePowerResolver` aplica os limites da rede, do carregador, do
-veículo e do pedido, redistribui sobras e prioriza a energia solar.
+O contrato `EnergyDataProvider` desacopla aquisição de dados e regras de
+energia. `SimulationEnergyDataProvider` calcula geração solar simulada por uma
+curva UTC; `TelemetryReplayEnergyDataProvider` reproduz um CSV versionado com
+potência fotovoltaica e metadados típicos de gateway. A configuração
+`ENERGY_DATA_PROVIDER` seleciona a fonte sem alterar API, persistência ou
+alocação. `EqualSharePowerResolver` aplica os limites da rede, do carregador,
+do veículo e do pedido, redistribui sobras e prioriza a energia solar.
 `simulation/tick.py` persiste leituras, acumuladores, checkpoint e alertas na
 mesma transação. O frontend apenas apresenta os resultados; não replica as
 regras energéticas.
@@ -56,11 +60,14 @@ energia.
 ## Limites do MVP
 
 - energia solar, medição e billing são simulados;
+- o replay aproxima o formato de aquisição, mas não consulta equipamento,
+  gateway ou nuvem externa;
 - não há integração física, OCPP/Modbus ou pagamento real;
 - ML depende de artefato preparado e histórico causal compatível;
 - para uma demo reproduzível, use um banco isolado e o procedimento em
   [`MVP_DELIVERY_SMOKE_TEST.md`](MVP_DELIVERY_SMOKE_TEST.md).
 
-Os diagramas em [`sprint-3/`](sprint-3/README.md) são evidências da entrega da
-Sprint 3. Eles ajudam na apresentação, mas este documento e o código vigente
-prevalecem caso uma legenda histórica tenha sido superada.
+Os diagramas finais e a sequência do fluxo automatizado estão na
+[`entrega da Sprint 4`](sprint4/README.md). Os diagramas em
+[`sprint-3/`](sprint-3/README.md) são evidências históricas e podem ter legendas
+superadas pelo código vigente.

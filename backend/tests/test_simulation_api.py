@@ -232,6 +232,7 @@ async def test_simulation_lifecycle_readings_filters_and_reset(
         "tick_duration_seconds": 60,
         "simulation_speed": 60,
         "last_tick": None,
+        "energy_data_source": "curve",
     }
     assert (await client.post(f"{base}/ticks")).status_code == 409
     with caplog.at_level("INFO"):

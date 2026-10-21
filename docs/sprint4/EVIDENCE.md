@@ -181,3 +181,27 @@ da rede, 20 kW solares, zero violações, risco `HIGH`, invoice de R$ 0,94,
 com timers falsos confirmaram a atualização automática e sua interrupção
 quando a simulação para.
 
+## Revalidação após revisão final — 21/10/2026
+
+Após expor a fonte de dados no status da simulação, corrigir o rótulo do
+dashboard e consolidar a documentação, os dois comandos canônicos foram
+executados novamente no checkout atual.
+
+`make check` terminou com código zero:
+
+- Ruff e mypy aprovados;
+- 249 testes backend aprovados, com 95% de cobertura;
+- ESLint e TypeScript aprovados;
+- 41 testes frontend aprovados em 6 arquivos;
+- build Vite aprovado, com 639 módulos transformados.
+
+`make mvp-smoke` exigiu acesso autorizado ao socket do Docker no ambiente de
+execução e então terminou com `[passed]`. O ensaio aplicou migrations até
+`20261012_0013 (head)`, não encontrou diferenças de metadata, iniciou banco,
+backend e frontend saudáveis e removeu os recursos isolados ao final.
+
+O Golden Path reproduziu 80 kW atendidos por 20 kW solares e 60 kW da rede,
+zero violações, 12,3667 kWh agregados, 19,1375% de participação solar, 0,9467 kg
+de CO₂ evitado, economia teórica de R$ 1,89, invoice de R$ 0,94, previsão de
+76,8243 kW e risco `HIGH`.
+

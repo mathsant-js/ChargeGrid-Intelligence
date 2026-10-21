@@ -13,7 +13,7 @@ trabalho previsto pelo plano, sem alegação de entrega.
 | S4-05 | Alocação respeita potência solicitada, limites individuais e limite da rede | `backend/app/services/energy_allocation.py`, validações defensivas em `backend/app/simulation/tick.py` | `backend/tests/test_energy_allocation.py`, teste de invariantes automáticas em `backend/tests/test_simulation_runner.py` | Golden Path: 4 × 15 kW sem solar e rede em 60 kW — **Baseline** |
 | S4-06 | Solar tem prioridade sem exceder geração disponível | `backend/app/services/energy_allocation.py`, `backend/app/simulation/tick.py` | `backend/tests/test_energy_allocation.py`, `backend/tests/test_simulation_tick.py` | Golden Path: 80 kW = 20 kW solar + 60 kW rede — **Baseline** |
 | S4-07 | Curva solar é determinística, finita, não negativa e limitada ao pico | `backend/app/simulation/energy_data.py::SimulationEnergyDataProvider` | `backend/tests/test_simulation_energy_data.py` | Suíte backend aprovada — **Baseline** |
-| S4-08 | Dashboard expõe KPIs, gráficos, sessões, alertas, ML e ESG | `frontend/src/pages/AdminDashboardPage.tsx` | `frontend/src/pages/AdminDashboardPage.test.tsx`, `frontend/src/pages/energyHistory.test.ts` | 40 testes frontend e build aprovados; smoke confirmou os serviços — **Baseline** |
+| S4-08 | Dashboard expõe KPIs, gráficos, sessões, alertas, ML e ESG | `frontend/src/pages/AdminDashboardPage.tsx` | `frontend/src/pages/AdminDashboardPage.test.tsx`, `frontend/src/pages/energyHistory.test.ts` | 41 testes frontend e build aprovados; smoke confirmou os serviços — **Concluído** |
 | S4-09 | Dashboard atualiza periodicamente durante execução | `frontend/src/pages/AdminDashboardPage.tsx` | testes com timers falsos em `frontend/src/pages/AdminDashboardPage.test.tsx` | **Concluído (Etapa 2)** |
 | S4-10 | Polling é cancelado no unmount e não sobrepõe consultas | `frontend/src/pages/AdminDashboardPage.tsx` | testes de cleanup e atualização em `frontend/src/pages/AdminDashboardPage.test.tsx` | **Concluído (Etapa 2)** |
 | S4-11 | Usuário pode solicitar atualização imediata | Botão `Atualizar agora` em `frontend/src/pages/AdminDashboardPage.tsx` | `frontend/src/pages/AdminDashboardPage.test.tsx` | **Concluído (Etapa 2)** |
@@ -27,6 +27,8 @@ trabalho previsto pelo plano, sem alegação de entrega.
 | S4-19 | Validação completa executa `make check` e `make mvp-smoke` | `Makefile`, `scripts/mvp_smoke.sh` | Execução final real em 20/10/2026 | Ambos aprovados; ensaio funcional completo pela API pública — **Concluído (Etapa 6)** |
 | S4-20 | Documentação final descreve arquitetura, sequência, resultados, ESG, GoodWe, limitações e reprodução | `docs/sprint4/README.md`, `architecture.mmd`, `sequence.mmd`, `results.md`, `video-script.md` | Revisão de links, SVG/XML e correspondência com código e etapa 4 | **Concluído (Etapa 5)** |
 | S4-21 | Capturas atuais evidenciam dashboard e operação | `docs/sprint4/screenshots/` | Ensaio visual do build de produção com dados do Golden Path | **Concluído (Etapa 5)** |
+| S4-22 | Interface identifica a fonte efetivamente configurada | status da simulação e `AdminDashboardPage.tsx` | resposta da API para curva e teste do dashboard para replay | **Concluído (revisão final)** |
+| S4-23 | Aderência GoodWe e impactos são justificados sem alegar integração física | `README.md`, `telemetry-contract.md` e referências oficiais | revisão documental e links oficiais | **Concluído (revisão final)** |
 
 ## Relação com o `SPEC.md`
 

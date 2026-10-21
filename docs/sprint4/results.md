@@ -29,6 +29,20 @@ Os totais ESG agregam o histórico causal preparado para o modelo e as leituras
 do cenário. Por isso, não devem ser interpretados como resultado exclusivo dos
 três marcos energéticos exibidos durante a demonstração.
 
+## Resultados qualitativos
+
+- o gestor acompanha relógio, fonte de dados, KPIs, previsão, alertas e ESG na
+  mesma interface;
+- o cenário pode ser repetido sem aguardar a duração real de uma recarga;
+- a origem da energia pode ser trocada sem alterar regras críticas;
+- falhas e ausência de telemetria têm comportamento explícito e testado;
+- os limites de rede, carregador, veículo e pedido permanecem determinísticos,
+  mesmo quando existe previsão de ML.
+
+Esses resultados demonstram integração e auditabilidade. Eles não validam
+latência de campo, disponibilidade de rede, precisão de sensores, aceitação por
+usuários ou retorno financeiro de uma instalação real.
+
 ## Avaliação de Machine Learning
 
 | Modelo | MAE | RMSE | R² |

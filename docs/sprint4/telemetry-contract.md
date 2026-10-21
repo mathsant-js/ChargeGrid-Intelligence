@@ -41,3 +41,21 @@ O tick valida a potência contra o pico da estação e entrega o valor ao alocad
 Equal Share. Campos de rede e carga do CSV não substituem as regras do domínio,
 e nenhuma telemetria pode ultrapassar limites de rede, carregador, veículo ou
 potência solicitada.
+
+## Mapeamento conceitual de equipamentos e sensores
+
+| Campo | Origem física plausível | Uso no MVP |
+| --- | --- | --- |
+| `timestamp` | relógio do gateway ou plataforma de supervisão | chave temporal exata normalizada em UTC |
+| `station_code` | cadastro da planta, gateway ou estação | associação da amostra à estação simulada |
+| `pv_power_kw` | inversor fotovoltaico ou medidor no ponto de geração | única medição do replay que alimenta a disponibilidade solar |
+| `grid_power_kw` | smart meter no ponto de conexão com a rede | validado e preservado como campo informativo; não controla alocação |
+| `load_power_kw` | smart meter, medidor de carga ou gateway | validado e informativo; não substitui leituras das sessões |
+| `inverter_status` | diagnóstico do inversor/gateway | informativo; ainda não gera estado de equipamento ou alerta |
+| `temperature_c` | sensor interno ou ambiental reportado pelo equipamento | informativo; não participa do cálculo energético |
+| `data_quality` | gateway, pipeline de aquisição ou regra de estimativa | informa proveniência; ausência exata gera `MISSING` |
+
+O mapeamento descreve uma origem plausível, não um registrador, endereço ou
+payload oficial GoodWe. Antes de criar um provider físico, seria necessário
+confirmar modelo, firmware, protocolo autorizado, escala, unidade, frequência,
+timezone e semântica de cada ponto.

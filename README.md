@@ -10,6 +10,15 @@ O projeto é um **monólito modular** com FastAPI, React e PostgreSQL. O
 Os documentos `PHASE_*` e da Sprint 3 são registros históricos e não devem ser
 usados isoladamente como manual operacional.
 
+## Entrega final — Sprint 4
+
+A documentação consolidada da solução final, com equipe, arquitetura,
+integração, resultados, sustentabilidade, aderência conceitual à GoodWe,
+diagramas, capturas e matriz de rastreabilidade está no
+[`README da Sprint 4`](docs/sprint4/README.md). Os resultados foram obtidos com
+telemetria reproduzida e equipamentos simulados; não há alegação de conexão
+física com hardware GoodWe.
+
 ## Caminho recomendado
 
 Para preparar e executar a demonstração completa a partir de uma instalação
@@ -122,6 +131,8 @@ A classificação completa está em [`docs/README.md`](docs/README.md).
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md): fluxo de desenvolvimento;
 - [`docs/ML_EVALUATION.md`](docs/ML_EVALUATION.md): método e limites da avaliação
   de ML.
+- [`docs/sprint4/README.md`](docs/sprint4/README.md): entrega final consolidada,
+  resultados, evidências e aderência à Sprint 4.
 
 ### Histórico e evidências
 

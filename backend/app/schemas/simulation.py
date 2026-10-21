@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.simulation.clock import SimulationClockState
+from app.simulation.energy_data import EnergyDataSource
 
 
 class SimulationStatusResponse(BaseModel):
@@ -11,6 +12,7 @@ class SimulationStatusResponse(BaseModel):
     tick_duration_seconds: float
     simulation_speed: int
     last_tick: datetime | None
+    energy_data_source: EnergyDataSource
 
 
 class SimulationTickResponse(BaseModel):
