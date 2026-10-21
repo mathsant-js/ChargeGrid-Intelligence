@@ -126,3 +126,29 @@ smoke ficou sem acesso ao socket do Docker no ambiente restrito; a repetição
 autorizada acessou o daemon e terminou com `[passed]`, removendo containers,
 rede e volumes isolados ao final.
 
+## Etapa 5 — Documentação e diagramas
+
+Concluída em **20/10/2026** a partir do código e dos resultados da etapa 4.
+Foram produzidos:
+
+- README final com equipe, problema, solução, reprodução, validação,
+  sustentabilidade, aderência conceitual à GoodWe e limitações;
+- arquitetura e sequência em Mermaid, acompanhadas de SVGs versionados;
+- tabela quantitativa separada, com escopo explícito dos valores ESG;
+- roteiro de vídeo de até cinco minutos;
+- duas capturas atuais do build de produção: dashboard do gestor e operação.
+
+Para preparar as capturas, foi criado um projeto Docker Compose isolado, com
+PostgreSQL limpo, migrations, seed, artefato de ML e replay de telemetria. O
+`scripts/sprint4_demo.py` foi executado novamente e reproduziu os mesmos marcos
+da etapa 4: 80 kW atendidos com 20 kW solares e 60 kW da rede, zero violações,
+12,3667 kWh, 19,1375% solar, 0,9467 kg de CO₂ evitado, invoice de R$ 0,94 e
+risco `HIGH`.
+
+A revisão visual também identificou duas limitações agora documentadas: o
+rótulo da fonte no dashboard está fixo como curva solar mesmo com replay ativo;
+e o servidor Vite de desenvolvimento pode permanecer em “Carregando” após a
+remontagem do `React.StrictMode`. O build de produção capturado carregou os
+KPIs, previsão, ESG, gráficos, histórico e alertas corretamente. Nenhum código
+de negócio ou schema foi alterado nesta etapa.
+

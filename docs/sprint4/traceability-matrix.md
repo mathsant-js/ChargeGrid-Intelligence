@@ -25,6 +25,8 @@ trabalho previsto pelo plano, sem alegação de entrega.
 | S4-17 | Cenário registra resultados reais de energia, billing, ESG, risco e métricas | resumo JSON de `scripts/sprint4_demo.py` e pipeline de ML | `make mvp-smoke` | Saída inclui energia, participação solar, CO₂, economia, invoice, risco e recomendação — **Concluído (Etapa 4)** |
 | S4-18 | Materiais da Sprint 4 ficam em `docs/sprint4/` | Índice, baseline e esta matriz | Revisão de links e diff | **Concluído (Etapa 1)** |
 | S4-19 | Validação completa executa `make check` e `make mvp-smoke` | `Makefile`, `scripts/mvp_smoke.sh` | Execução real em 20/10/2026 | Ambos aprovados — **Concluído (Etapa 1)** |
+| S4-20 | Documentação final descreve arquitetura, sequência, resultados, ESG, GoodWe, limitações e reprodução | `docs/sprint4/README.md`, `architecture.mmd`, `sequence.mmd`, `results.md`, `video-script.md` | Revisão de links, SVG/XML e correspondência com código e etapa 4 | **Concluído (Etapa 5)** |
+| S4-21 | Capturas atuais evidenciam dashboard e operação | `docs/sprint4/screenshots/` | Ensaio visual do build de produção com dados do Golden Path | **Concluído (Etapa 5)** |
 
 ## Relação com o `SPEC.md`
 
@@ -34,5 +36,5 @@ trabalho previsto pelo plano, sem alegação de entrega.
 | § 37 e §§ 45–51 — API pública | S4-12, S4-16 |
 | §§ 52–53 — dashboards | S4-08 a S4-12 |
 | §§ 55–63 — demonstração, aceite e testes | S4-05 a S4-08, S4-16, S4-17, S4-19 |
-| §§ 64–69 — requisitos não funcionais e Definition of Done | S4-02 a S4-04, S4-18, S4-19 |
+| §§ 64–69 — requisitos não funcionais e Definition of Done | S4-02 a S4-04, S4-18 a S4-21 |
 
