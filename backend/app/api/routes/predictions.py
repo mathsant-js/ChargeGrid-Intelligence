@@ -107,11 +107,7 @@ async def execute_demand_prediction(
             station=station,
             configuration=configuration,
             artifact_path=settings.demand_model_path,
-            generated_at=(
-                control.clock.current_instant
-                if settings.demo_simulation_start_utc is not None
-                else None
-            ),
+            generated_at=control.clock.current_instant,
         )
     except PredictionDataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

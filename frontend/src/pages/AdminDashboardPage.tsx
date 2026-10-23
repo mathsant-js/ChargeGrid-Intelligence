@@ -85,9 +85,12 @@ export function AdminDashboardPage() {
     void loadDashboard()
   }, [loadDashboard])
 
-  useEffect(() => () => {
-    mountedRef.current = false
-    requestIdRef.current += 1
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      requestIdRef.current += 1
+    }
   }, [])
 
   useEffect(() => {

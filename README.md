@@ -21,7 +21,7 @@ física com hardware GoodWe.
 
 ## Caminho recomendado
 
-Para preparar e executar a demonstração completa a partir de uma instalação
+Para validar automaticamente a demonstração completa a partir de uma instalação
 limpa, use:
 
 ```bash
@@ -34,6 +34,10 @@ Golden Path pela API pública e remove os containers e volumes temporários. Ele
 não altera o volume `postgres_data` do ambiente de desenvolvimento. Requisitos,
 portas alternativas e solução de problemas estão no
 [`guia vigente da demo`](docs/MVP_DELIVERY_SMOKE_TEST.md).
+
+**O dashboard não permanece disponível após `make mvp-smoke`.** Para abrir as
+telas com os dados da demonstração, use a
+[`reprodução em banco de demo limpo`](docs/sprint-3/README.md#reprodução-em-banco-de-demo-limpo).
 
 Use o roteiro manual da
 [`entrega da Sprint 3`](docs/sprint-3/README.md) somente quando precisar manter
@@ -116,6 +120,11 @@ energia solar são demonstrativos; não há integração com hardware, pagamento
 real, OCPP ou Modbus. Consulte a
 [`arquitetura vigente`](docs/ARCHITECTURE.md) para responsabilidades, fluxo e
 limites.
+
+Para gerar uma previsão, a estação precisa ter ao menos uma leitura de demanda
+e uma leitura solar até o instante simulado, além do artefato do modelo treinado.
+Se ainda não houver histórico para o mesmo dia da semana e hora, a média histórica
+usa `0`, conforme o preparo do dataset; a previsão continua consultiva.
 
 ## Mapa da documentação
 

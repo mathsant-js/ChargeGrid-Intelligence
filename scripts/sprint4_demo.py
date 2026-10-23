@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 BASE = os.environ.get("DEMO_API_URL", "http://localhost:8000/api/v1").rstrip("/")
+FRONTEND = os.environ.get("DEMO_FRONTEND_URL", "http://localhost:5173").rstrip("/")
 PREFIX = "SPRINT3-DEMO"
 WAIT_TIMEOUT_SECONDS = float(os.environ.get("DEMO_AUTOMATIC_WAIT_TIMEOUT_SECONDS", "15"))
 POLL_INTERVAL_SECONDS = 0.05
@@ -39,6 +40,21 @@ def require(condition: bool, stage: str, message: str) -> None:
 def login(email: str, password: str) -> str:
     result = call("POST", "/auth/login", body={"email": email, "password": password})
     return result["access_token"]
+
+
+def check_browser_cors() -> None:
+    request = Request(
+        BASE + "/analytics/dashboard",
+        method="OPTIONS",
+        headers={
+            "Origin": FRONTEND,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    with urlopen(request, timeout=15) as response:
+        require(response.headers.get("Access-Control-Allow-Origin") == FRONTEND,
+                "browser CORS", f"API does not allow frontend origin {FRONTEND}")
 
 
 def wait_for_readings(admin: str, station_id: str, timestamp: str,
@@ -81,6 +97,7 @@ def validate_allocation(readings: list[dict], expected_solar: float,
 
 
 def main() -> None:
+    check_browser_cors()
     admin_password = os.environ.get("DEMO_ADMIN_PASSWORD")
     user_password = os.environ.get("DEMO_USER_PASSWORD")
     if not admin_password or not user_password:

@@ -19,7 +19,7 @@ services:
     environment:
       APP_ENV: demo
       APP_LOG_LEVEL: INFO
-      APP_CORS_ORIGINS: '["http://localhost:${MVP_SMOKE_FRONTEND_PORT:?required}"]'
+      APP_CORS_ORIGINS: '["http://localhost:${MVP_SMOKE_FRONTEND_PORT:?required}","http://127.0.0.1:${MVP_SMOKE_FRONTEND_PORT:?required}"]'
       DATABASE_URL: postgresql+psycopg://${MVP_SMOKE_POSTGRES_USER}:${MVP_SMOKE_POSTGRES_PASSWORD}@db:5432/${MVP_SMOKE_POSTGRES_DB}
       JWT_SECRET_KEY: ${MVP_SMOKE_JWT_SECRET:?required}
       JWT_EXPIRATION_MINUTES: 60

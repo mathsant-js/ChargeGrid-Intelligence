@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
@@ -115,6 +116,14 @@ describe('admin dashboard prediction', () => {
 })
 
 describe('admin dashboard operations', () => {
+  it('loads dashboard data under React StrictMode', async () => {
+    mockApi()
+    tokenStore.set('token')
+    render(<StrictMode><MemoryRouter initialEntries={['/admin']}><App /></MemoryRouter></StrictMode>)
+
+    expect(await screen.findByRole('region', { name: 'Estado da simulação' })).toBeInTheDocument()
+  })
+
   it('shows the simulated clock, runner state, speed, last tick and data source', async () => {
     mockApi({ simulationStatus: () => ({ ...simulation, state: 'RUNNING', last_tick: '2026-09-18T11:57:00Z' }) }); show()
     const status = await screen.findByRole('region', { name: 'Estado da simulação' })

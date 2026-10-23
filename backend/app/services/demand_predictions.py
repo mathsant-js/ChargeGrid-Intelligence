@@ -98,10 +98,6 @@ def build_inference_features(
         if _as_utc(timestamp).weekday() == generated_at.weekday()
         and _as_utc(timestamp).hour == generated_at.hour
     ]
-    if not historical:
-        raise PredictionDataError(
-            "insufficient features: no prior observation exists for this weekday and hour"
-        )
     active_sessions = db.scalar(
         select(func.count(ChargingSession.id))
         .join(Charger, ChargingSession.charger_id == Charger.id)
@@ -118,7 +114,8 @@ def build_inference_features(
             is_weekend=generated_at.weekday() >= 5,
             active_sessions=int(active_sessions),
             current_demand_kw=float(current_demand),
-            historical_avg_demand_kw=sum(historical) / len(historical),
+            # Training uses zero until this weekday/hour has a prior sample.
+            historical_avg_demand_kw=sum(historical) / len(historical) if historical else 0.0,
             solar_available_kw=solar_available,
         ),
         solar_available,
