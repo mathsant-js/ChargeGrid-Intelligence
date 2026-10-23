@@ -144,9 +144,12 @@ def execute_tick(
                     skipped += 1
                     continue
 
-                solar_available = solar_provider.solar_available_kw(
-                    timestamp, locked_station.station_peak_solar_kw
+                energy_sample = solar_provider.sample(
+                    timestamp,
+                    locked_station.name,
+                    locked_station.station_peak_solar_kw,
                 )
+                solar_available = energy_sample.solar_available_kw
                 if (
                     not math.isfinite(solar_available)
                     or not 0 <= solar_available <= locked_station.station_peak_solar_kw

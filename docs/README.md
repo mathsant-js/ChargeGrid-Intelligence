@@ -15,6 +15,7 @@ reexecutado no checkout atual.
 | [`MVP_DELIVERY_SMOKE_TEST.md`](MVP_DELIVERY_SMOKE_TEST.md) | Procedimento oficial para preparar, executar e diagnosticar a demo. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Instalação de desenvolvimento e verificações. |
 | [`ML_EVALUATION.md`](ML_EVALUATION.md) | Metodologia, métricas e limites do modelo atual. |
+| [`sprint4/README.md`](sprint4/README.md) | Entrega final consolidada, resultados, evidências, diagramas e aderência GoodWe. |
 
 ## Registros históricos
 
@@ -35,9 +36,9 @@ testes podem ter sido superadas por fases posteriores.
 
 1. A partir da raiz, confirme Docker e Docker Compose disponíveis.
 2. Execute `make mvp-smoke` para a validação completa, isolada e descartável.
-3. Se precisar apresentar as telas, siga a execução manual em
-   [`MVP_DELIVERY_SMOKE_TEST.md`](MVP_DELIVERY_SMOKE_TEST.md), que encaminha ao
-   roteiro da Sprint 3 apenas para a parte interativa.
+3. Se precisar apresentar as telas, use a seção “Como reproduzir” da
+   [`entrega da Sprint 4`](sprint4/README.md), apoiada pelo procedimento em
+   [`MVP_DELIVERY_SMOKE_TEST.md`](MVP_DELIVERY_SMOKE_TEST.md).
 4. Consulte [`ARCHITECTURE.md`](ARCHITECTURE.md) para explicar o fluxo e
    [`ML_EVALUATION.md`](ML_EVALUATION.md) para explicar as métricas.
 

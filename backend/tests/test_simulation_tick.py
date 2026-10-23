@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,7 +19,13 @@ from app.models.simulation import SimulationState
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.simulation.clock import SimulationClock
-from app.simulation.energy_data import SimulationEnergyDataProvider
+from app.simulation.energy_data import (
+    DataQuality,
+    EnergyDataSample,
+    EnergyDataSource,
+    SimulationEnergyDataProvider,
+    TelemetryReplayEnergyDataProvider,
+)
 from app.simulation.tick import PowerBreakdown, SessionPowerRequest, execute_tick
 
 INSTANT = datetime(2026, 9, 16, 12, tzinfo=UTC)
@@ -45,8 +52,12 @@ class FixedSolarProvider:
     def __init__(self, value: float) -> None:
         self.value = value
 
-    def solar_available_kw(self, timestamp: datetime, station_peak_solar_kw: float) -> float:
-        return self.value
+    source = EnergyDataSource.TELEMETRY_REPLAY
+
+    def sample(
+        self, timestamp: datetime, station_code: str, station_peak_solar_kw: float
+    ) -> EnergyDataSample:
+        return EnergyDataSample(self.value, self.source, DataQuality.GOOD)
 
 
 def clock() -> SimulationClock:
@@ -124,6 +135,39 @@ def configured_threshold(db: Session, threshold: float) -> None:
 
 def alerts_of_type(db: Session, alert_type: AlertType) -> list[Alert]:
     return list(db.scalars(select(Alert).where(Alert.type == alert_type)))
+
+
+def test_tick_integrates_replayed_telemetry_without_changing_energy_invariants(
+    db_session: Session, tmp_path: Path
+) -> None:
+    station, session = add_session(db_session)
+    path = tmp_path / "telemetry.csv"
+    path.write_text(
+        "timestamp,station_code,pv_power_kw,grid_power_kw,load_power_kw,"
+        "inverter_status,temperature_c,data_quality\n"
+        "2026-09-16T12:00:00Z,Station,8,1,9,ONLINE,35,GOOD\n",
+        encoding="utf-8",
+    )
+    resolver = FixedResolver({session.id: PowerBreakdown(9, 8, 1)})
+
+    result = execute_tick(
+        db_session,
+        clock=clock(),
+        solar_provider=TelemetryReplayEnergyDataProvider(path),
+        power_resolver=resolver,
+    )
+
+    reading = db_session.scalar(select(EnergyReading))
+    solar = db_session.scalar(select(SolarReading))
+    assert result.energy_readings_created == 1
+    assert reading is not None and solar is not None
+    assert reading.allocated_power_kw <= session.requested_power_kw
+    assert reading.allocated_power_kw <= 11
+    assert reading.grid_power_kw <= station.grid_limit_kw
+    assert reading.solar_power_kw <= solar.available_power_kw == 8
+    assert reading.interval_energy_kwh == pytest.approx(
+        reading.solar_energy_kwh + reading.grid_energy_kwh
+    )
 
 
 def test_high_solar_alert_is_configurable_and_deduplicated_by_episode(

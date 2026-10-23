@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">Arquitetura final do ChargeGrid Intelligence na Sprint 4</title>
+  <desc id="desc">Frontend React, API FastAPI modular, providers de energia substituíveis, alocação determinística, serviços de ML consultivo e PostgreSQL.</desc>
+  <defs>
+    <style>
+      .bg{fill:#071f19}.panel{fill:#0c3328;stroke:#43e7a3;stroke-width:2}.box{fill:#124535;stroke:#8ef1c8;stroke-width:2}.data{fill:#17384b;stroke:#68b8e9;stroke-width:2}.advisory{fill:#4a3915;stroke:#f4c95d;stroke-width:2}.t{fill:#f3fff9;font:600 20px Arial,sans-serif}.s{fill:#c9e7db;font:16px Arial,sans-serif}.h{fill:#43e7a3;font:700 30px Arial,sans-serif}.line{stroke:#8ef1c8;stroke-width:3;fill:none;marker-end:url(#arrow)}.dash{stroke:#f4c95d;stroke-width:3;stroke-dasharray:9 8;fill:none;marker-end:url(#arrow2)}
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#8ef1c8"/></marker>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#f4c95d"/></marker>
+  </defs>
+  <rect class="bg" width="1400" height="820" rx="20"/>
+  <text class="h" x="45" y="55">ChargeGrid Intelligence · arquitetura final da Sprint 4</text>
+  <rect class="box" x="55" y="110" width="235" height="105" rx="14"/><text class="t" x="105" y="153">Dashboard React</text><text class="s" x="80" y="183">Polling, KPIs, gráficos e alertas</text>
+  <rect class="panel" x="365" y="85" width="650" height="560" rx="20"/><text class="t" x="585" y="123">FastAPI · monólito modular · /api/v1</text>
+  <rect class="box" x="405" y="165" width="250" height="90" rx="12"/><text class="t" x="445" y="202">Sessões + Billing</text><text class="s" x="430" y="229">transições e invoice simulada</text>
+  <rect class="box" x="715" y="165" width="255" height="90" rx="12"/><text class="t" x="760" y="202">Analytics + ESG</text><text class="s" x="744" y="229">dashboards e alertas</text>
+  <rect class="box" x="405" y="310" width="250" height="100" rx="12"/><text class="t" x="439" y="350">Runner automático</text><text class="s" x="437" y="378">checkpoint e tick transacional</text>
+  <rect class="box" x="715" y="310" width="255" height="100" rx="12"/><text class="t" x="758" y="350">Equal Share</text><text class="s" x="738" y="378">limites + prioridade solar</text>
+  <rect class="advisory" x="715" y="480" width="255" height="100" rx="12"/><text class="t" x="760" y="520">ML consultivo</text><text class="s" x="747" y="548">previsão +60 min e risco</text>
+  <rect class="data" x="55" y="315" width="235" height="90" rx="12"/><text class="t" x="98" y="352">Curva sintética</text><text class="s" x="99" y="379">provider padrão</text>
+  <rect class="data" x="55" y="455" width="235" height="110" rx="12"/><text class="t" x="86" y="494">Replay de telemetria</text><text class="s" x="78" y="523">CSV sintético versionado</text><text class="s" x="92" y="548">origem + qualidade</text>
+  <rect class="data" x="1090" y="285" width="250" height="130" rx="18"/><text class="t" x="1140" y="332">PostgreSQL 16</text><text class="s" x="1118" y="363">estado, leituras, sessões,</text><text class="s" x="1130" y="389">invoices e previsões</text>
+  <rect class="advisory" x="395" y="700" width="610" height="70" rx="14"/><text class="t" x="495" y="742">ML nunca substitui as invariantes energéticas</text>
+  <path class="line" d="M290 162H365"/><text class="s" x="303" y="148">HTTP/JWT</text>
+  <path class="line" d="M290 360H405"/><path class="line" d="M290 510H405"/><text class="s" x="302" y="445">EnergyDataProvider</text>
+  <path class="line" d="M655 360H715"/><path class="line" d="M970 360H1090"/><path class="line" d="M655 210C1015 210 1015 310 1090 310"/><path class="line" d="M970 210C1035 210 1035 335 1090 335"/><path class="line" d="M970 530C1050 530 1050 390 1090 390"/>
+  <path class="dash" d="M840 580V700"/>
+  <text class="s" x="1045" y="470">SQLAlchemy 2 + Alembic</text>
+</svg>
+

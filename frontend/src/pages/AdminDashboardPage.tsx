@@ -15,6 +15,10 @@ const active = (session: ChargingSession) => session.status === 'CHARGING' || se
 const validPrediction = (prediction: DemandPrediction, stationId: string) => prediction.station_id === stationId && Number.isFinite(prediction.predicted_demand_kw) && prediction.predicted_demand_kw >= 0 && Number.isFinite(prediction.capacity_kw) && prediction.capacity_kw > 0 && ['LOW', 'MEDIUM', 'HIGH'].includes(prediction.risk_level)
 const risk = { LOW: { label: 'Baixo', symbol: '●' }, MEDIUM: { label: 'Médio', symbol: '▲' }, HIGH: { label: 'Alto', symbol: '!' } } as const
 const DASHBOARD_POLL_INTERVAL_MS = 1000
+const energyDataSourceLabel: Record<SimulationStatus['energy_data_source'], string> = {
+  curve: 'Curva solar sintética',
+  telemetry_replay: 'Replay de telemetria sintética',
+}
 
 export function AdminDashboardPage() {
   const { state, logout } = useAuth()
@@ -81,9 +85,12 @@ export function AdminDashboardPage() {
     void loadDashboard()
   }, [loadDashboard])
 
-  useEffect(() => () => {
-    mountedRef.current = false
-    requestIdRef.current += 1
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      requestIdRef.current += 1
+    }
   }, [])
 
   useEffect(() => {
@@ -150,7 +157,7 @@ export function AdminDashboardPage() {
   return <AppShell><div className="dashboard">
     <header className="dashboard-heading"><div><p className="eyebrow">Administração</p><h1>Dashboard do gestor</h1><p>Olá, {state.status === 'authenticated' ? state.user.name : ''}</p></div><button onClick={logout}>Sair</button></header>
     <div className="dashboard-filters"><label>Estação <select value={stationId} onChange={event => { setStationId(event.target.value) }}><option value="">Todas as estações</option>{data?.stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label><label>Período <select value={period} onChange={event => { setPeriod(event.target.value) }}><option value="all">Todo o histórico</option><option value="24h">Últimas 24 horas</option><option value="7d">Últimos 7 dias</option></select></label><button disabled={refreshing} onClick={() => { void refreshDashboard() }}>{refreshing ? 'Atualizando...' : 'Atualizar agora'}</button></div>
-    {data && <section className="simulation-status" aria-label="Estado da simulação"><div><span>Estado</span><strong>{data.simulation.state === 'RUNNING' ? 'Em execução' : 'Parada'}</strong></div><div><span>Instante simulado</span><strong>{time(data.simulation.current_instant)}</strong></div><div><span>Último tick</span><strong>{data.simulation.last_tick ? time(data.simulation.last_tick) : 'Ainda não executado'}</strong></div><div><span>Velocidade</span><strong>{number(data.simulation.simulation_speed)}×</strong></div><div><span>Fonte dos dados</span><strong>Curva solar sintética</strong></div><div><span>Última atualização</span><strong>{lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('pt-BR') : '—'}</strong></div></section>}
+    {data && <section className="simulation-status" aria-label="Estado da simulação"><div><span>Estado</span><strong>{data.simulation.state === 'RUNNING' ? 'Em execução' : 'Parada'}</strong></div><div><span>Instante simulado</span><strong>{time(data.simulation.current_instant)}</strong></div><div><span>Último tick</span><strong>{data.simulation.last_tick ? time(data.simulation.last_tick) : 'Ainda não executado'}</strong></div><div><span>Velocidade</span><strong>{number(data.simulation.simulation_speed)}×</strong></div><div><span>Fonte dos dados</span><strong>{energyDataSourceLabel[data.simulation.energy_data_source]}</strong></div><div><span>Última atualização</span><strong>{lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('pt-BR') : '—'}</strong></div></section>}
     {error && <div role="alert" className="dashboard-error"><p>{error}</p>{!data && <button onClick={() => { void refreshDashboard() }}>Tentar novamente</button>}</div>}
     {!data ? <p role="status">Carregando dashboard...</p> : <>
       <section className="kpi-grid" aria-label="Indicadores"><DashboardCard label="Demanda atual" value={`${number(demand)} kW`} /><DashboardCard label="Limite da rede" value={`${number(limit)} kW`} /><DashboardCard label="Capacidade disponível" value={`${number(Math.max(0, limit - grid))} kW`} /><DashboardCard label="Solar disponível" value={`${number(solarAvailable)} kW`} /><DashboardCard label="Solar em uso" value={`${number(solarUse)} kW`} /><DashboardCard label="Rede em uso" value={`${number(grid)} kW`} /><DashboardCard label="Carregadores ativos" value={new Set(currentSessions.map(session => session.charger_id)).size} /><DashboardCard label="Sessões ativas" value={currentSessions.length} /><DashboardCard label="Faturamento" value={money(data.summary.billed_total)} /><DashboardCard label="Energia consumida" value={`${number(data.summary.energy_consumed_kwh)} kWh`} /><DashboardCard label="Energia renovável" value={`${number(data.sustainability.solar_energy_kwh)} kWh`} /><DashboardCard label="CO₂ evitado" value={`${number(data.sustainability.avoided_co2_kg)} kg`} /></section>

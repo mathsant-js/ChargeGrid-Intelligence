@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import timedelta
+from pathlib import Path
 from threading import Event, Lock, Thread
 
 import pytest
@@ -13,6 +14,11 @@ from app.models.infrastructure import ChargingStation
 from app.models.simulation import SimulationState
 from app.simulation.clock import SimulationClock, SimulationClockState
 from app.simulation.control import SimulationController
+from app.simulation.energy_data import (
+    EnergyDataSource,
+    SimulationEnergyDataProvider,
+    TelemetryReplayEnergyDataProvider,
+)
 from app.simulation.tick import TickResult
 from tests.test_simulation_api import INSTANT, seed_charging_session
 
@@ -45,6 +51,22 @@ def make_controller(
         SimulationClock(initial_instant=INSTANT), session_factory=factory, wait=wait
     )
     return control, factory
+
+
+def test_controller_builds_configured_provider(tmp_path: Path) -> None:
+    replay = tmp_path / "telemetry.csv"
+    replay.write_text(
+        "timestamp,station_code,pv_power_kw,grid_power_kw,load_power_kw,"
+        "inverter_status,temperature_c,data_quality\n",
+        encoding="utf-8",
+    )
+
+    curve = SimulationController._build_energy_data_provider("curve", replay)
+    telemetry = SimulationController._build_energy_data_provider("telemetry_replay", replay)
+
+    assert isinstance(curve, SimulationEnergyDataProvider)
+    assert isinstance(telemetry, TelemetryReplayEnergyDataProvider)
+    assert telemetry.source is EnergyDataSource.TELEMETRY_REPLAY
 
 
 @pytest.mark.anyio

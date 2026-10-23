@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password
+from app.main import app
 from app.models.alert import Alert, AlertType
 from app.models.energy import ChargingSession, ChargingSessionStatus, EnergyReading, SolarReading
 from app.models.infrastructure import Charger, ChargerStatus, ChargingStation
@@ -21,6 +22,8 @@ from app.services.demand_predictions import (
     classify_risk,
     run_demand_prediction,
 )
+from app.simulation.clock import SimulationClock
+from app.simulation.control import SimulationController, get_simulation_controller
 
 
 class FixedModel:
@@ -162,6 +165,43 @@ def test_inference_features_ignore_future_energy_and_solar_readings(
     assert features.current_demand_kw == 12
     assert features.historical_avg_demand_kw == 10
     assert features.solar_available_kw == solar_available == 20
+
+
+def test_inference_uses_training_default_for_unseen_weekday_hour(
+    db_session: Session,
+) -> None:
+    station, _, instant = seed_inference_context(db_session)
+
+    features, _ = build_inference_features(db_session, station.id, instant + timedelta(hours=1))
+
+    assert features.current_demand_kw == 12
+    assert features.historical_avg_demand_kw == 0
+
+
+@pytest.mark.anyio
+async def test_run_endpoint_uses_simulated_clock_for_unseen_hour(
+    client: AsyncClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    station, _, instant = seed_inference_context(db_session)
+    simulated_instant = instant + timedelta(hours=1)
+    controller = SimulationController(SimulationClock(initial_instant=simulated_instant))
+
+    async def override_controller() -> SimulationController:
+        return controller
+
+    app.dependency_overrides[get_simulation_controller] = override_controller
+    monkeypatch.setattr(
+        "app.services.demand_predictions.load_model_artifact", lambda _: FixedModel(42)
+    )
+
+    response = await client.post(
+        "/api/v1/predictions/demand/run", json={"station_id": str(station.id)}
+    )
+
+    assert response.status_code == 201
+    generated_at = datetime.fromisoformat(response.json()["generated_at"]).replace(tzinfo=UTC)
+    assert generated_at == simulated_instant
+    assert response.json()["predicted_demand_kw"] == 42
 
 
 def test_inference_persists_sixty_minute_forecast_and_does_not_change_allocation(

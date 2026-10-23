@@ -27,6 +27,7 @@ def _status(control: SimulationController) -> SimulationStatusResponse:
             tick_duration_seconds=control.clock.tick_duration.total_seconds(),
             simulation_speed=control.clock.simulation_speed,
             last_tick=control.last_tick,
+            energy_data_source=control.energy_data_provider.source,
         )
 
 

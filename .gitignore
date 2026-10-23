@@ -234,6 +234,7 @@ data/raw/*
 data/processed/*
 data/models/*
 !data/raw/.gitkeep
+!data/raw/sprint4_telemetry.csv
 !data/processed/.gitkeep
 !data/models/.gitkeep
 

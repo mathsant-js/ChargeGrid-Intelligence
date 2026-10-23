@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
@@ -13,7 +14,7 @@ const reading = { id: 'r1', session_id: 'se1', timestamp: '2026-09-17T12:00:00Z'
 const alert = { id: 'a1', station_id: 's1', title: 'Demanda elevada', message: 'Verifique a rede', severity: 'WARNING', type: 'HIGH_DEMAND', created_at: '2026-09-17T12:00:00Z', acknowledged_at: null }
 const summary = { session_count: 1, completed_session_count: 0, energy_consumed_kwh: 5, billed_total: '0.00' }
 const sustainability = { station_id: null, user_id: null, energy_consumed_kwh: 5, solar_energy_kwh: 2, grid_energy_kwh: 3, solar_percentage: 40, avoided_co2_kg: 0.8, grid_emission_factor_kg_per_kwh: 0.4, estimated_solar_savings: '1.84', currency: 'BRL' }
-const simulation: SimulationStatus = { state: 'STOPPED', current_instant: '2026-09-18T11:58:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null }
+const simulation: SimulationStatus = { state: 'STOPPED', current_instant: '2026-09-18T11:58:00Z', tick_duration_seconds: 60, simulation_speed: 60, last_tick: null, energy_data_source: 'curve' }
 const prediction: DemandPrediction = { id: 'p1', station_id: 's1', generated_at: new Date().toISOString(), prediction_for: new Date(Date.now() + 3600000).toISOString(), predicted_demand_kw: 54, capacity_kw: 60, risk_level: 'HIGH', prediction_horizon_minutes: 60, model_version: 'rf-2026.09', recommendation: 'Monitore novas sessões.' }
 
 type MockOptions = { prediction?: DemandPrediction | null; predictionFailure?: number | 'network'; runResult?: DemandPrediction; runFailure?: number | 'network'; stationList?: typeof stations; simulationStatus?: () => SimulationStatus; energyReading?: () => typeof reading }
@@ -115,6 +116,14 @@ describe('admin dashboard prediction', () => {
 })
 
 describe('admin dashboard operations', () => {
+  it('loads dashboard data under React StrictMode', async () => {
+    mockApi()
+    tokenStore.set('token')
+    render(<StrictMode><MemoryRouter initialEntries={['/admin']}><App /></MemoryRouter></StrictMode>)
+
+    expect(await screen.findByRole('region', { name: 'Estado da simulação' })).toBeInTheDocument()
+  })
+
   it('shows the simulated clock, runner state, speed, last tick and data source', async () => {
     mockApi({ simulationStatus: () => ({ ...simulation, state: 'RUNNING', last_tick: '2026-09-18T11:57:00Z' }) }); show()
     const status = await screen.findByRole('region', { name: 'Estado da simulação' })
@@ -122,6 +131,13 @@ describe('admin dashboard operations', () => {
     expect(status).toHaveTextContent('18/09/2026')
     expect(status).toHaveTextContent('60×')
     expect(status).toHaveTextContent('Curva solar sintética')
+  })
+
+  it('identifies telemetry replay as the configured data source', async () => {
+    mockApi({ simulationStatus: () => ({ ...simulation, energy_data_source: 'telemetry_replay' }) }); show()
+    const status = await screen.findByRole('region', { name: 'Estado da simulação' })
+    expect(status).toHaveTextContent('Replay de telemetria sintética')
+    expect(status).not.toHaveTextContent('Curva solar sintética')
   })
 
   it('polls only while running and stops polling when the backend reports stopped', async () => {

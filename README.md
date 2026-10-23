@@ -10,9 +10,18 @@ O projeto é um **monólito modular** com FastAPI, React e PostgreSQL. O
 Os documentos `PHASE_*` e da Sprint 3 são registros históricos e não devem ser
 usados isoladamente como manual operacional.
 
+## Entrega final — Sprint 4
+
+A documentação consolidada da solução final, com equipe, arquitetura,
+integração, resultados, sustentabilidade, aderência conceitual à GoodWe,
+diagramas, capturas e matriz de rastreabilidade está no
+[`README da Sprint 4`](docs/sprint4/README.md). Os resultados foram obtidos com
+telemetria reproduzida e equipamentos simulados; não há alegação de conexão
+física com hardware GoodWe.
+
 ## Caminho recomendado
 
-Para preparar e executar a demonstração completa a partir de uma instalação
+Para validar automaticamente a demonstração completa a partir de uma instalação
 limpa, use:
 
 ```bash
@@ -25,6 +34,10 @@ Golden Path pela API pública e remove os containers e volumes temporários. Ele
 não altera o volume `postgres_data` do ambiente de desenvolvimento. Requisitos,
 portas alternativas e solução de problemas estão no
 [`guia vigente da demo`](docs/MVP_DELIVERY_SMOKE_TEST.md).
+
+**O dashboard não permanece disponível após `make mvp-smoke`.** Para abrir as
+telas com os dados da demonstração, use a
+[`reprodução em banco de demo limpo`](docs/sprint-3/README.md#reprodução-em-banco-de-demo-limpo).
 
 Use o roteiro manual da
 [`entrega da Sprint 3`](docs/sprint-3/README.md) somente quando precisar manter
@@ -108,6 +121,11 @@ real, OCPP ou Modbus. Consulte a
 [`arquitetura vigente`](docs/ARCHITECTURE.md) para responsabilidades, fluxo e
 limites.
 
+Para gerar uma previsão, a estação precisa ter ao menos uma leitura de demanda
+e uma leitura solar até o instante simulado, além do artefato do modelo treinado.
+Se ainda não houver histórico para o mesmo dia da semana e hora, a média histórica
+usa `0`, conforme o preparo do dataset; a previsão continua consultiva.
+
 ## Mapa da documentação
 
 A classificação completa está em [`docs/README.md`](docs/README.md).
@@ -122,6 +140,8 @@ A classificação completa está em [`docs/README.md`](docs/README.md).
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md): fluxo de desenvolvimento;
 - [`docs/ML_EVALUATION.md`](docs/ML_EVALUATION.md): método e limites da avaliação
   de ML.
+- [`docs/sprint4/README.md`](docs/sprint4/README.md): entrega final consolidada,
+  resultados, evidências e aderência à Sprint 4.
 
 ### Histórico e evidências
 

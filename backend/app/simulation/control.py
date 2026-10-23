@@ -5,6 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
+from pathlib import Path
 from threading import RLock
 
 from sqlalchemy import func, select
@@ -17,7 +18,11 @@ from app.models.prediction import SystemConfiguration
 from app.models.simulation import SimulationState
 from app.services.energy_allocation import EqualSharePowerResolver
 from app.simulation.clock import SimulationClock, SimulationClockState
-from app.simulation.energy_data import SimulationEnergyDataProvider
+from app.simulation.energy_data import (
+    EnergyDataProvider,
+    SimulationEnergyDataProvider,
+    TelemetryReplayEnergyDataProvider,
+)
 from app.simulation.tick import TickResult, execute_tick
 
 logger = logging.getLogger(__name__)
@@ -36,9 +41,11 @@ class SimulationController:
         session_factory: SessionFactory = SessionLocal,
         wait: WaitFunction = asyncio.sleep,
         runner_interval_seconds: float | None = None,
+        energy_data_provider: EnergyDataProvider | None = None,
     ) -> None:
+        settings = get_settings()
         self.clock = clock or SimulationClock(
-            initial_instant=get_settings().demo_simulation_start_utc or datetime.now(UTC)
+            initial_instant=settings.demo_simulation_start_utc or datetime.now(UTC)
         )
         self.last_tick: datetime | None = None
         self.lock = RLock()
@@ -47,10 +54,21 @@ class SimulationController:
         self._runner_interval_seconds = (
             runner_interval_seconds
             if runner_interval_seconds is not None
-            else get_settings().simulation_runner_interval_seconds
+            else settings.simulation_runner_interval_seconds
+        )
+        self.energy_data_provider = energy_data_provider or self._build_energy_data_provider(
+            settings.energy_data_provider, settings.telemetry_replay_path
         )
         self._runner_task: asyncio.Task[None] | None = None
         self._runner_guard = asyncio.Lock()
+
+    @staticmethod
+    def _build_energy_data_provider(
+        provider_name: str, telemetry_path: Path
+    ) -> EnergyDataProvider:
+        if provider_name == "telemetry_replay":
+            return TelemetryReplayEnergyDataProvider(telemetry_path)
+        return SimulationEnergyDataProvider()
 
     @property
     def runner_active(self) -> bool:
@@ -207,7 +225,7 @@ class SimulationController:
                 result = execute_tick(
                     db,
                     clock=self.clock,
-                    solar_provider=SimulationEnergyDataProvider(),
+                    solar_provider=self.energy_data_provider,
                     power_resolver=EqualSharePowerResolver(),
                 )
             except Exception:

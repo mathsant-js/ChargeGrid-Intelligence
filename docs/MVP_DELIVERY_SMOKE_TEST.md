@@ -28,6 +28,11 @@ O comando:
    billing, ESG, dashboards, OpenAPI e frontend;
 8. remove containers, rede e volumes que pertencem somente ao projeto do teste.
 
+`make mvp-smoke` é uma verificação temporária: depois de `[passed]`, o frontend
+e os dados de teste já foram removidos. Abrir `localhost:15173` nesse momento
+não exibirá o dashboard. O teste também verifica o preflight CORS da origem do
+frontend para a API.
+
 Para uma apresentação com o ambiente mantido no ar, execute a seção
 “Reprodução em banco de demo limpo” do
 [`roteiro manual da Sprint 3`](sprint-3/README.md). Embora o restante daquele

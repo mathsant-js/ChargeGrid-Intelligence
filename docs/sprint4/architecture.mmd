@@ -1,0 +1,33 @@
+flowchart LR
+  U[Usuário / gestor] -->|HTTPS / JSON + JWT| F[React + TypeScript\nDashboard vivo]
+  F -->|/api/v1| A[FastAPI\nMonólito modular]
+
+  subgraph B[Backend ChargeGrid]
+    A --> AUTH[Auth e cadastros]
+    A --> SESSION[Sessões de recarga]
+    A --> SIM[Controlador da simulação\nrunner automático]
+    A --> VIEW[Analytics, ESG, alertas\ne dashboards]
+    A --> ML[Previsão de demanda\nconsultiva]
+    SESSION --> BILL[Billing simulado]
+    SIM --> TICK[Tick transacional]
+    CURVE[Curva solar sintética] --> PROVIDER[EnergyDataProvider]
+    CSV[CSV de telemetria\nsintética versionado] --> REPLAY[TelemetryReplayEnergyDataProvider]
+    REPLAY --> PROVIDER
+    CURVE --> PROVIDER
+    PROVIDER --> TICK
+    TICK --> ALLOC[Equal Share\nlimites + prioridade solar]
+  end
+
+  AUTH --> ORM[SQLAlchemy 2]
+  SESSION --> ORM
+  BILL --> ORM
+  TICK --> ORM
+  VIEW --> ORM
+  ML --> ORM
+  ORM --> DB[(PostgreSQL 16)]
+  DB --> VIEW
+  DB --> ML
+
+  ML -. recomendação, nunca controle .-> F
+  ALLOC -. invariantes protegidas .-> DB
+

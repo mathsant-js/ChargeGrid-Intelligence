@@ -22,7 +22,7 @@ export interface Tariff { id: string; name: string; price_per_kwh: string; curre
 export interface TariffInput { name: string; price_per_kwh: number; currency: string; is_active: boolean; valid_from: string; valid_until: string | null }
 export interface SystemConfiguration { id: string; simulation_speed: number; grid_emission_factor_kg_per_kwh: number; high_demand_threshold: number; high_solar_availability_threshold: number; medium_peak_threshold: number; high_peak_threshold: number; created_at: string; updated_at: string }
 export type SystemConfigurationInput = Omit<SystemConfiguration, 'id' | 'created_at' | 'updated_at'>
-export interface SimulationStatus { state: 'RUNNING' | 'STOPPED'; current_instant: string; tick_duration_seconds: number; simulation_speed: number; last_tick: string | null }
+export interface SimulationStatus { state: 'RUNNING' | 'STOPPED'; current_instant: string; tick_duration_seconds: number; simulation_speed: number; last_tick: string | null; energy_data_source: 'curve' | 'telemetry_replay' }
 export interface SolarReading { id: string; station_id: string; timestamp: string; available_power_kw: number }
 export interface DemandPrediction { id: string; station_id: string; generated_at: string; prediction_for: string; predicted_demand_kw: number; capacity_kw: number; risk_level: 'LOW' | 'MEDIUM' | 'HIGH'; prediction_horizon_minutes: number; model_version: string; recommendation: string }
 export interface Alert { id: string; station_id: string; type: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; title: string; message: string; created_at: string; acknowledged_at: string | null }
